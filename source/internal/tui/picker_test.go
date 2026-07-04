@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 
 	"github.com/jim-collier/nano-git-db/internal/core/config"
 )
@@ -92,6 +93,38 @@ func TestPickerSelectsRegistered(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("picker did not return after selecting a database")
+	}
+}
+
+// Highlighting a blank spacer row hops to a real entry, in either direction, so
+// arrowing through the menu never rests on an empty line.
+func TestPickerSkipsSpacers(t *testing.T) {
+	isolateConfig(t)
+	ddlPath := writeValidDDL(t)
+	if _, err := config.Create("todo", ddlPath, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	p := &picker{
+		app:    tview.NewApplication(),
+		pages:  tview.NewPages(),
+		list:   tview.NewList(),
+		status: tview.NewTextView(),
+		listed: config.List(),
+	}
+	p.build()
+	// rows: 0=todo, 1=spacer, 2=Create, 3=spacer, 4=Open
+	p.list.SetCurrentItem(0)
+	p.moveSelection(1) // down over spacer 1 -> Create at 2
+	if got := p.list.GetCurrentItem(); got != 2 {
+		t.Fatalf("down over spacer landed on %d, want 2", got)
+	}
+	p.moveSelection(-1) // up over spacer 1 -> todo at 0
+	if got := p.list.GetCurrentItem(); got != 0 {
+		t.Fatalf("up over spacer landed on %d, want 0", got)
+	}
+	p.moveSelection(-1) // already at the top -> stays put
+	if got := p.list.GetCurrentItem(); got != 0 {
+		t.Fatalf("up at top moved to %d, want 0", got)
 	}
 }
 

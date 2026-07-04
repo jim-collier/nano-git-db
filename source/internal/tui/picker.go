@@ -24,12 +24,13 @@ type pickResult struct {
 // create or open one. It is its own tview app, run before the main App over the
 // chosen database.
 type picker struct {
-	app    *tview.Application
-	pages  *tview.Pages
-	list   *tview.List
-	status *tview.TextView
-	listed []config.Listed
-	result *pickResult
+	app     *tview.Application
+	pages   *tview.Pages
+	list    *tview.List
+	status  *tview.TextView
+	listed  []config.Listed
+	actions []func() // per list row; nil for a blank spacer row
+	result  *pickResult
 }
 
 // pickDatabase runs the picker and returns the chosen database, or nil if the
@@ -53,14 +54,24 @@ func pickDatabase(screen tcell.Screen) (*pickResult, error) {
 	return p.result, nil
 }
 
-// createIdx / openIdx are the two trailing menu entries, after the registered
-// databases.
-func (p *picker) createIdx() int { return len(p.listed) }
-func (p *picker) openIdx() int   { return len(p.listed) + 1 }
-
 func (p *picker) build() {
-	p.list.ShowSecondaryText(true).SetBorder(true).SetTitle(" choose a database ")
+	// Each entry is two lines (name + path/hint), the border padding keeps the
+	// block off the frame, and blank spacer rows sit between entries, so it
+	// reads as a menu instead of a packed grid.
+	p.list.ShowSecondaryText(true).
+		SetSelectedTextColor(tcell.ColorBlack).
+		SetBorder(true).SetTitle(" nano-git-db ").
+		SetBorderPadding(1, 1, 3, 3)
+
+	// Build the entries with their actions, then lay them out interleaved with
+	// spacer rows. actions[i] indexes list rows 1:1; a nil action = a spacer.
+	type entry struct {
+		main, sub string
+		act       func()
+	}
+	var entries []entry
 	for _, l := range p.listed {
+		l := l
 		main := l.Name
 		sub := l.Dir
 		if l.System {
@@ -70,18 +81,55 @@ func (p *picker) build() {
 			main = "[!] " + main
 			sub = l.Err.Error()
 		}
-		p.list.AddItem(main, sub, 0, nil)
+		entries = append(entries, entry{main, sub, func() { p.chooseListed(l) }})
 	}
-	p.list.AddItem("Create new database", "register a new database and open it", 0, nil)
-	p.list.AddItem("Open existing ...", "open a DDL + tx-log without registering", 0, nil)
-	p.list.SetSelectedFunc(func(i int, _, _ string, _ rune) { p.choose(i) })
+	entries = append(entries,
+		entry{"Create new database", "register a new database and open it", p.createForm},
+		entry{"Open existing ...", "open a DDL + tx-log without registering", p.openForm})
+	for i, e := range entries {
+		if i > 0 {
+			p.list.AddItem("", "", 0, nil)
+			p.actions = append(p.actions, nil)
+		}
+		p.list.AddItem(e.main, e.sub, 0, nil)
+		p.actions = append(p.actions, e.act)
+	}
+	p.list.SetSelectedFunc(func(i int, _, _ string, _ rune) {
+		if i >= 0 && i < len(p.actions) && p.actions[i] != nil {
+			p.actions[i]()
+		}
+	})
+	// Up/Down step over the blank spacer rows so the highlight only ever rests
+	// on a real entry. First and last rows are always real, so it never runs
+	// off the ends.
+	p.list.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		switch {
+		case ev.Key() == tcell.KeyDown || ev.Rune() == 'j':
+			p.moveSelection(1)
+			return nil
+		case ev.Key() == tcell.KeyUp || ev.Rune() == 'k':
+			p.moveSelection(-1)
+			return nil
+		}
+		return ev
+	})
 
 	p.status.SetDynamicColors(true)
 	p.setStatus("enter=open | Create/Open to make or open one | q=quit")
 
-	root := tview.NewFlex().SetDirection(tview.FlexRow).
+	// Center the menu as a bordered panel with margins around it, instead of
+	// filling the whole screen. Proportional spacers keep it centred at any
+	// terminal size while leaving generous room for long paths.
+	panel := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(p.list, 0, 1, true).
 		AddItem(p.status, 1, 0, false)
+	root := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(panel, 0, 5, true).
+			AddItem(nil, 0, 1, false), 0, 4, true).
+		AddItem(nil, 0, 1, false)
 	p.pages.AddPage("main", root, true, true)
 
 	p.app.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
@@ -98,27 +146,31 @@ func (p *picker) build() {
 
 func (p *picker) setStatus(msg string) { p.status.SetText(" " + msg) }
 
-// choose acts on a list selection: open a registered database, or open one of
-// the create/open sub-forms.
-func (p *picker) choose(i int) {
-	switch {
-	case i < len(p.listed):
-		l := p.listed[i]
-		if l.Err != nil {
-			p.setStatus("cannot open " + l.Name + ": " + l.Err.Error())
-			return
-		}
-		p.finish(&pickResult{
-			ddlPath:    l.Config.DDLPath,
-			sqlitePath: l.Config.SQLitePath,
-			logDir:     l.Config.LogDir,
-			cfg:        l.Config,
-		})
-	case i == p.createIdx():
-		p.createForm()
-	case i == p.openIdx():
-		p.openForm()
+// moveSelection advances the highlight by dir (+1/-1), skipping spacer rows and
+// stopping at the ends rather than wrapping.
+func (p *picker) moveSelection(dir int) {
+	n := p.list.GetItemCount()
+	i := p.list.GetCurrentItem() + dir
+	for i >= 0 && i < n && p.actions[i] == nil {
+		i += dir
 	}
+	if i >= 0 && i < n {
+		p.list.SetCurrentItem(i)
+	}
+}
+
+// chooseListed opens a registered database, or reports why it can't open.
+func (p *picker) chooseListed(l config.Listed) {
+	if l.Err != nil {
+		p.setStatus("cannot open " + l.Name + ": " + l.Err.Error())
+		return
+	}
+	p.finish(&pickResult{
+		ddlPath:    l.Config.DDLPath,
+		sqlitePath: l.Config.SQLitePath,
+		logDir:     l.Config.LogDir,
+		cfg:        l.Config,
+	})
 }
 
 // finish records the result and ends the picker so the caller can open it.
