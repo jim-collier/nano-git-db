@@ -43,11 +43,12 @@ In each section, items are listed approximately from newest to oldest.
 
 ### Misc to-do
 
-- 🔘 Need to research, decide, and document how to separate different concerns in the enterprise repo (and identify what the concerns even are), e.g.:
+- 🛠️ Need to research, decide, and document how to separate different concerns in the enterprise repo (and identify what the concerns even are), e.g.:
 	- Customer-facing enterprise product
 	- Our owned side used to (possibly) generate license keys, process payment, check subscription status, etc. This would basically be a completely separate company precense, ecommerce, and validation system.
 		- Basic requirements:
 			- 🔘 Minimal web dependencies. (To minimize contant cascading updates pulling in potentially hundreds of unknown/untrusted dependencies, near-constant churn with breaking and deprecating third-party updates; and also the growing threat of "supply-chain attack" risk.)
+	- Research drafted in [research-enterprise-concerns.md](research-enterprise-concerns.md): names the five concerns, proposes drawing the boundary by the signing-key asset (never in a customer artifact), recommends a separate vendor repo, and covers the minimal-web-deps requirement. Awaiting owner decisions listed at the end of that doc.
 
 ### Bugs
 
@@ -64,9 +65,8 @@ In each section, items are listed approximately from newest to oldest.
 - ✅ Ability to delete entries from TUI (e.g. invalid ones).
 	- Done: in the startup picker, `d` (or Delete) on a database asks to remove it, then - only if it has files on disk - a second confirm offers to delete those too (default keep). Remove just deregisters (drops the registry record); delete also removes the tx-log dir and record dir. The `.ddl` schema is always kept. Broken `[!]` records are removable; read-only system records are not.
 
-- 🔘 Enterprise license validation scheme. Commonly used, phones home to verify active, allows N copies simultaneously. But doesn't fail if can't phone home for some time. Doesn't bind to specific hardware or anything.
-
-- 🔘 Need to figure
+- 🛠️ Enterprise license validation scheme. Commonly used, phones home to verify active, allows N copies simultaneously. But doesn't fail if can't phone home for some time. Doesn't bind to specific hardware or anything.
+	- Scheme drafted in [research-license-validation.md](research-license-validation.md): signed offline-verifiable token (Ed25519, stdlib) whose validity window IS the grace period; periodic phone-home refreshes it; random per-install instance id for soft seat counting (no hardware binding); lapse degrades to read-only, never data loss. Enterprise-only. Awaiting owner decisions listed at the end of that doc.
 
 - ✅ Exe name should be 'ngdb'.
 	- Done: the built binary and all user-facing references (CLI/TUI/web usage, version line, web title) are now `ngdb`; `cmd/nanogitdb` renamed to `cmd/ngdb`. The module path `nano-git-db` and the `NANOGITDB_USER`/`NANOGITDB_HOST` env vars are unchanged.
@@ -76,6 +76,7 @@ In each section, items are listed approximately from newest to oldest.
 	- Behind a reverse proxy, require a username and password. The stronger methods belong to the enterprise edition.
 	- The signed-in user must reach the data layer, so the existing user and group permissions apply to the web view.
 	- Settle first how to tell a local machine apart from a proxied one, since a proxy also connects from localhost. Prefer an explicit setting over guessing.
+		- Decided (owner, 2026-07-04): explicit mode setting plus a header safety-net. A setting (e.g. `web_mode: local|proxied`, default `local`) is authoritative: `local` = auto-identify, no password; `proxied` = require username + password. Safety-net: if the setting is left at `local` but an incoming request carries a forwarded-for / proxy header, refuse to serve (or force login) so an accidental exposure can never run passwordless. Local identity resolves to the git repo account, else the OS user (reuse the existing default-user resolution). Still to design at build time: where proxied credentials live (a local credentials file outside the git-synced tree, bcrypt-hashed, is the likely answer since syncing password hashes via git is undesirable).
 
 - ✅ Order of fields in txlog should NOT affect backward or forward schema compatibility.
 	- Done: the reader maps columns by the header row's names instead of fixed positions. A column can be reordered, added, or dropped - an unknown extra column is ignored, a missing one defaults to empty (this subsumes the old host_name legacy-width special-case). Header rows are detected by their reserved column names, so even the header order can change. A record just needs enough fields to carry the required columns, else it's flagged torn.
