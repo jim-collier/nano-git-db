@@ -55,11 +55,89 @@ var header = []string{
 	"operation", "new_value", "user_id", "ok_to_garbage_collect", "host_name",
 }
 
-// legacyFields is the record width before host_name was appended. Logs written
-// by older clients (and union-merged alongside new ones) still parse: host_name
-// stays empty for them. host_name is appended last so every other column keeps
-// its index across both widths.
-var legacyFields = len(header) - 1
+// canonicalCols is the name->index map for the built-in header, used as the
+// default before a file's own header row is seen.
+var canonicalCols = colsFrom(header)
+
+// colsFrom builds a column-name -> index map from a header record (first wins on
+// a duplicate name). Reading maps every field through this map, so the on-disk
+// column order can change, and columns can be added or dropped, without breaking
+// older or newer clients: a missing column defaults to empty and an unknown one
+// is simply ignored. tx_id stays the first column by convention - it is the
+// marker readLogFile uses to spot a header row.
+func colsFrom(rec []string) map[string]int {
+	m := make(map[string]int, len(rec))
+	for i, name := range rec {
+		if _, dup := m[name]; !dup {
+			m[name] = i
+		}
+	}
+	return m
+}
+
+// field reads a named column from a record via its header map, empty if the
+// column is absent (a newer/older layout) or the record is short.
+func field(rec []string, cols map[string]int, name string) string {
+	if i, ok := cols[name]; ok && i < len(rec) {
+		return rec[i]
+	}
+	return ""
+}
+
+// requiredCols are the columns a data record must carry to be usable; a row too
+// short to hold them all (under the active header's layout) is treated as torn.
+// The trailing optional columns (ok_to_garbage_collect, host_name) default when
+// absent, which is how a narrower legacy row reads under a wider header.
+var requiredCols = []string{
+	"tx_id", "date", "table_name", "row_id", "field_name", "operation", "new_value", "user_id",
+}
+
+// mergedCols is the read map for a header row: the header's own names win, and
+// any canonical column the header omits falls back to its canonical index. So a
+// column added in place (a wider row under an older, narrower header) is still
+// read, reorders follow the header, and unknown extra columns are ignored.
+func mergedCols(rec []string) map[string]int {
+	m := colsFrom(rec)
+	for name, idx := range canonicalCols {
+		if _, ok := m[name]; !ok {
+			m[name] = idx
+		}
+	}
+	return m
+}
+
+// isHeaderRow spots a header line without depending on column order: a data row
+// can never hold all four of these reserved column names at once (its table and
+// field names plus its one value give at most three user-controlled cells, and
+// the operation cell is a fixed verb), so the test is collision-proof.
+func isHeaderRow(rec []string) bool {
+	var tx, date, table, op bool
+	for _, s := range rec {
+		switch s {
+		case "tx_id":
+			tx = true
+		case "date":
+			date = true
+		case "table_name":
+			table = true
+		case "operation":
+			op = true
+		}
+	}
+	return tx && date && table && op
+}
+
+// minWidth is how many fields a record needs to carry every required column
+// under the given layout.
+func minWidth(cols map[string]int) int {
+	w := 0
+	for _, name := range requiredCols {
+		if i, ok := cols[name]; ok && i+1 > w {
+			w = i + 1
+		}
+	}
+	return w
+}
 
 // Log is an append-only CSV transaction log in a directory.
 type Log struct {
@@ -151,6 +229,13 @@ func readLogFile(path string) ([]Entry, []string, error) {
 	r.FieldsPerRecord = -1
 	r.LazyQuotes = true
 
+	// cols/minw track the layout of the most recent header row, so a file (or a
+	// union merge of files) whose columns were reordered, added, or dropped
+	// still reads correctly - each data row is decoded against the header above
+	// it, and a row only needs enough fields to carry the required columns.
+	cols := canonicalCols
+	minw := minWidth(cols)
+
 	var out []Entry
 	var warns []string
 	for {
@@ -167,16 +252,18 @@ func readLogFile(path string) ([]Entry, []string, error) {
 		if err != nil {
 			return nil, warns, err
 		}
-		if rec[0] == header[0] {
-			continue // a header row
-		}
-		if len(rec) != len(header) && len(rec) != legacyFields {
-			line, _ := r.FieldPos(0)
-			warns = append(warns, fmt.Sprintf(
-				"log %s line %d: torn record (%d of %d fields), skipped", path, line, len(rec), len(header)))
+		if isHeaderRow(rec) {
+			cols = mergedCols(rec) // a header row: adopt its column layout
+			minw = minWidth(cols)
 			continue
 		}
-		out = append(out, entryFrom(rec))
+		if len(rec) < minw {
+			line, _ := r.FieldPos(0)
+			warns = append(warns, fmt.Sprintf(
+				"log %s line %d: torn record (%d fields, need at least %d), skipped", path, line, len(rec), minw))
+			continue
+		}
+		out = append(out, entryFrom(rec, cols))
 	}
 	return out, warns, nil
 }
@@ -197,25 +284,32 @@ func (e Entry) record() []string {
 	}
 }
 
-func entryFrom(rec []string) Entry {
-	gc, _ := strconv.ParseBool(rec[8])
+// entryFrom decodes a data record against its header's column map, so every
+// field is read by name rather than a fixed position.
+func entryFrom(rec []string, cols map[string]int) Entry {
+	gc, _ := strconv.ParseBool(field(rec, cols, "ok_to_garbage_collect"))
 	e := Entry{
-		TxID: rec[0], Date: rec[1], Table: decodeSym(rec[2]), RowID: rec[3],
-		Field: decodeSym(rec[4]), Op: rec[5], UserID: decodeSym(rec[7]), GCReady: gc,
-	}
-	if len(rec) > legacyFields { // new-format record carries host_name last
-		e.HostName = decodeSym(rec[9])
+		TxID:     field(rec, cols, "tx_id"),
+		Date:     field(rec, cols, "date"),
+		Table:    decodeSym(field(rec, cols, "table_name")),
+		RowID:    field(rec, cols, "row_id"),
+		Field:    decodeSym(field(rec, cols, "field_name")),
+		Op:       field(rec, cols, "operation"),
+		UserID:   decodeSym(field(rec, cols, "user_id")),
+		HostName: decodeSym(field(rec, cols, "host_name")),
+		GCReady:  gc,
 	}
 	// The NULL and ENC markers are checked on the raw text: a user literal
 	// 🗦NULL🗧/🗦ENC🗧 was encoded with escaped delimiters, so it cannot collide.
+	val := field(rec, cols, "new_value")
 	switch {
-	case rec[6] == nullMarker:
+	case val == nullMarker:
 		e.IsNull = true
-	case strings.HasPrefix(rec[6], encMarker):
+	case strings.HasPrefix(val, encMarker):
 		e.Enc = true
-		e.NewValue = rec[6][len(encMarker):] // opaque token; crypt opens it later
+		e.NewValue = val[len(encMarker):] // opaque token; crypt opens it later
 	default:
-		e.NewValue = decodeSym(rec[6])
+		e.NewValue = decodeSym(val)
 	}
 	return e
 }

@@ -194,7 +194,9 @@ Fields:
 - new_value
 - user_id
 - ok_to_garbage_collect
-- host_name  ## Machine that wrote the entry. One user can write from several hosts; appended last so pre-host_name logs (9 fields) still parse - they read as an empty host.
+- host_name  ## Machine that wrote the entry. One user can write from several hosts.
+
+Reads map columns by the header row's names, not by position, so field order does not affect compatibility. A column can be reordered, added, or dropped and older and newer clients still read each other's logs: an unknown extra column is ignored, and a column a record lacks (e.g. a pre-host_name row, or a narrower legacy header) defaults to empty. A record only needs enough fields to carry the required columns (through `user_id`); anything shorter is treated as torn. Header rows are recognized by carrying the reserved column names rather than by their first cell, so even the header can be reordered. tx_id remains the conventional first column.
 
 `ok_to_garbage_collect` is populated automatically, when the original record (or table) referred to no longer exists. Only log records N-days old are garbage collected (by any client). Default is 90 days.
 

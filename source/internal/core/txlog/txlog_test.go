@@ -57,6 +57,37 @@ func TestAppendReadRoundTrip(t *testing.T) {
 
 // host_name round-trips, and a legacy record (no host_name column, as an
 // older client or a pre-host_name log would have written) still parses with
+// Columns are mapped by header name, so a reordered header and an unknown extra
+// trailing column (as a newer client might write) both read correctly - field
+// order does not affect forward or backward compatibility.
+func TestReadMapsColumnsByName(t *testing.T) {
+	dir := t.TempDir()
+	content := "host_name,tx_id,date,table_name,row_id,field_name,operation,new_value,user_id,ok_to_garbage_collect,future_flag\n" +
+		"box-z,t9,2026-07-02T00:00:00Z,person,rid1,name,update,Zoe,u9,false,X\n"
+	if err := os.WriteFile(filepath.Join(dir, "txlog.csv"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lg, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, warns, err := lg.ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warns) != 0 {
+		t.Fatalf("reordered/extended record should not warn, got %v", warns)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d entries, want 1", len(got))
+	}
+	e := got[0]
+	if e.TxID != "t9" || e.HostName != "box-z" || e.Table != "person" || e.RowID != "rid1" ||
+		e.Field != "name" || e.Op != "update" || e.NewValue != "Zoe" || e.UserID != "u9" {
+		t.Fatalf("columns mismapped by name: %+v", e)
+	}
+}
+
 // an empty host - the two widths coexist under a git union merge.
 func TestHostNameRoundTripAndLegacy(t *testing.T) {
 	dir := t.TempDir()
