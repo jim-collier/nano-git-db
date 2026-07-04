@@ -4,6 +4,7 @@
 package tui
 
 import (
+	"os"
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
@@ -180,13 +181,14 @@ func (p *picker) finish(r *pickResult) {
 }
 
 // createForm registers a new database (name required, refuses duplicates) and
-// opens it. The DDL and tx-log dir are existing artifacts the record points at;
-// the local sqlite/key default beside the record.
+// opens it. The DDL is an existing file the record points at; "location" is just
+// a repo or folder - the tx-log lands under `ngdb/<name>` inside a repo, or in
+// the folder as-is otherwise - so there is no separate tx-log path to enter.
 func (p *picker) createForm() {
 	form := tview.NewForm()
 	form.AddInputField("name", "", 0, nil, nil)
 	form.AddInputField("ddl path", "", 0, nil, nil)
-	form.AddInputField("tx-log dir", "", 0, nil, nil)
+	form.AddInputField("location (repo or folder)", "", 0, nil, nil)
 	closeForm := func() {
 		p.pages.RemovePage("create")
 		p.app.SetFocus(p.list)
@@ -194,9 +196,18 @@ func (p *picker) createForm() {
 	form.AddButton("Create", func() {
 		name := strings.TrimSpace(text(form, "name"))
 		ddlPath := strings.TrimSpace(text(form, "ddl path"))
-		logDir := strings.TrimSpace(text(form, "tx-log dir"))
-		if name == "" || ddlPath == "" || logDir == "" {
-			p.setStatus("name, ddl path and tx-log dir are all required")
+		location := strings.TrimSpace(text(form, "location (repo or folder)"))
+		if name == "" || ddlPath == "" || location == "" {
+			p.setStatus("name, ddl path and location are all required")
+			return
+		}
+		logDir, err := config.LogDirFor(location, name)
+		if err != nil {
+			p.setStatus("error: " + err.Error())
+			return
+		}
+		if err := os.MkdirAll(logDir, 0o755); err != nil {
+			p.setStatus("error: " + err.Error())
 			return
 		}
 		cfg, err := config.Create(name, ddlPath, logDir)
