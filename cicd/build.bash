@@ -12,9 +12,12 @@ if [[ -n "${GOOS:-}${GOARCH:-}" ]] && [[ "${GOOS:-$(go env GOHOSTOS)}-${GOARCH:-
 	[[ "${GOOS:-}" == "windows" ]]  &&  out="${out}.exe"
 fi
 
+# Version stamp: git describe if available, else "dev". -X sets it into app.Version.
+ver="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+
 # The module root lives under source/ (so vendored deps sit under source/ too).
 # -mod=vendor: build only from the committed vendor/ tree, never the network.
 mkdir -p bin
-( cd source && CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w" -o "../bin/${out}" ./cmd/nanogitdb )
+( cd source && CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w -X github.com/jim-collier/nano-git-db/app.Version=${ver}" -o "../bin/${out}" ./cmd/nanogitdb )
 # ls, not du: on compressing filesystems (zfs) du reports allocated, not real, size.
 echo "built: $(ls -lh "bin/${out}" | awk '{print $5}')	bin/${out}"

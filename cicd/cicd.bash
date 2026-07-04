@@ -150,8 +150,10 @@ fMain(){
 		## Build (size-optimized native; build.bash owns the flags, vendor mode, and the bin/ output)
 		fEcho "$(date "+%Y%m%d-%H%M%S") build.bash: Starting ..."
 		"${dirPath_Base}/cicd/build.bash"
-		## No launch of the built binary here - a bare invocation opens the TUI, and running
-		## the app is left as a separate manual step before the merge (cancellable if needed).
+		## Minimal execution test: --version prints one line and exits, never opening the
+		## TUI. Running the app for real stays a separate manual step before the merge.
+		fEcho "$(date "+%Y%m%d-%H%M%S") Version check ..."
+		"${filePath_ExecToTestAndInstall_BuildLocation}" --version
 
 		## Cross-compile: pure Go, so every target builds here with no extra toolchains.
 		## build.bash names cross outputs bin/nanogitdb-<os>-<arch>[.exe].
@@ -463,4 +465,4 @@ fMain  "${@}"
 ##		- 20260701 JC: Adapted from the convert-base-v2 template: nanogitdb name/paths, build.bash instead of make; cross-compile deferred to the CI/CD backlog item.
 ##		- 20260701 JC: build.bash moved into cicd/ and now outputs straight to bin/; dropped the staging copy.
 ##		- 20260701 JC: Wired cross-compile (win-amd64, linux-arm64, win-arm64), the windows zip, and govulncheck.
-##		- 20260703 JC: Dropped the post-build binary launch (bare invocation opens the TUI). Fixed the git-automation script path - it was missing the base prefix and doubled the cicd/ segment.
+##		- 20260703 JC: Replaced the post-build bare launch (which opened the TUI) with a --version check. Fixed the git-automation script path - it was missing the base prefix and doubled the cicd/ segment.
