@@ -46,7 +46,7 @@ if [[ -z "${doQuietly+x}" ]]; then
 
 	## Generic constants
 	declare  -i doQuietly=0
-	declare  -i doQuick=0  ## --quick: skip cross-builds and the slow supply-chain scan
+	declare  -i doQuick=0  ## --quick: skip cross-builds, screenshots, and the slow supply-chain scan
 	declare  -i doPromptToContinue=1
 	declare -r  thisVersion="1.0.0-beta3"         ## Put you script's semantic version here.
 	declare -r  thisBuild="1mzfd9c"
@@ -100,7 +100,7 @@ fSyntax(){  { ((doQuietly)) || ((wasShown_Syntax)); } && return; wasShown_Syntax
 	#           X-------------------------------------------------------------------------------X
 	fEcho_Clean "Usage: ${meName} [options]"
 	fEcho_Clean "  -q, --quiet         Run unattended (no prompt) and quiet; flows to publish."
-	fEcho_Clean "      --quick         Skip cross-builds and the slow govulncheck scan."
+	fEcho_Clean "      --quick         Skip cross-builds, screenshots, and the govulncheck scan."
 	fEcho_Clean "  -m, --message MSG   Commit message for publish (also --msg; -m MSG or -m=MSG)."
 	fEcho_Clean "                      With -q and no -m, a message is auto-generated."
 	fEcho_Clean "  -h, --help          Show this."
@@ -162,7 +162,7 @@ fMain(){
 		fi
 		fEcho_Clean "Test script ..................: ${filePath_CICD_TestExec}"
 		if ((doQuick)); then
-		fEcho_Clean "Quick mode ...................: cross-builds + govulncheck skipped"
+		fEcho_Clean "Quick mode ...................: cross-builds + screenshots + govulncheck skipped"
 		fi
 		fEcho_Clean "Git commit and push script ...: ${gitAutomationScript}"
 		if [[ -n "${commitMessage}" ]]; then
@@ -276,6 +276,18 @@ fMain(){
 		done;:
 	fi
 
+	## Screenshots: regenerate the README thumbnails from the just-built binary
+	## (--no-build reuses it). Slow (headless capture), so --quick skips it. Note:
+	## the demo db uses fresh UUIDv7 ids each run, so most shots differ byte-wise
+	## every build - a full run will restage them for the publish below.
+	if ((doQuick)); then
+		fEcho_Section "Screenshots (skipped: --quick)"
+	elif [[ -x "${dirPath_Base}/utility/screenshots.bash" ]]; then
+		fEcho_Section "Screenshots"
+		"${dirPath_Base}/utility/screenshots.bash" --no-build
+		fEcho_Clean "Screenshots regenerated"
+	fi
+
 	## Optional local hooks (not in the repo). Any private/hooks/claude/*.bash run
 	## here, before publish, so anything a hook regenerates gets committed in the
 	## same run. No-op when the folder is absent. A hook gets the repo base path as
@@ -307,9 +319,9 @@ fMain(){
 
 #••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 fCleanup(){
-	if ((! doQuietly)); then :
-		fEcho_Clean
-	fi
+	## Always leave a trailing blank line for breathing room before the prompt
+	## (fEcho_Clean collapses it if the last line was already blank).
+	fEcho_Clean
 }
 
 
@@ -552,4 +564,5 @@ fMain  "${@}"
 ##		- 20260704 JC: Added -q/--quiet (unattended, flows to publish) and -m/--message (auto-generated under -q); stage headers use fEcho.
 ##		- 20260704 JC: Renamed the built executable nanogitdb -> ngdb.
 ##		- 20260704 JC: Added --quick (skip cross-builds and govulncheck).
+##		- 20260704 JC: --quick also skips screenshots; screenshots.bash moved to github/utility/; run screenshots as a stage before publish; always leave a trailing blank line.
 ##		- 20260704 JC: Preflight now captures the commit message up front (Ctrl+C aborts) instead of a y/n gate; section headers get the letterbox rule; passes --no-prompt to the publish step so it doesn't re-ask.

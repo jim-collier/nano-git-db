@@ -17,8 +17,8 @@
 set -Eeuo pipefail
 
 dirPath_Self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-dirPath_Repo="$(cd "$dirPath_Self/../.." && pwd)"
-headless="$dirPath_Self/gui-headless.bash"
+dirPath_Repo="$(cd "$dirPath_Self/.." && pwd)"
+headless="$dirPath_Repo/cicd/utility/gui-headless.bash"
 exe="$dirPath_Repo/bin/ngdb"
 dirLarge="$dirPath_Repo/assets/screenshots/large"
 dirSmall="$dirPath_Repo/assets/screenshots"
@@ -201,3 +201,4 @@ fMain "$@"
 
 ##	Script history:
 ##		- 20260704 JC: Created.
+##		- 20260704 JC: Moved to github/utility/; headless helper still in cicd/utility/. Run from cicd under a non-quick build.
