@@ -48,13 +48,14 @@ In each section, items are listed approximately from newest to oldest.
 	- Our owned side used to (possibly) generate license keys, process payment, check subscription status, etc. This would basically be a completely separate company precense, ecommerce, and validation system.
 		- Basic requirements:
 			- 🔘 Minimal web dependencies. (To minimize contant cascading updates pulling in potentially hundreds of unknown/untrusted dependencies, near-constant churn with breaking and deprecating third-party updates; and also the growing threat of "supply-chain attack" risk.)
-	- Research drafted in the enterprise repo (`research-enterprise-concerns.md`), awaiting owner decisions listed there.
+	- Decisions captured in the enterprise repo (`research-enterprise-concerns.md`); implementation is phased (see the folder-hierarchy item below).
 
 ### Bugs
 
 ### New features and enhancements
 
-- 🔘 Set up the folder hierarchy to separate and delineate the concerns decided in the "Misc to-do" above. (Possibly an additional new private repo?)
+- 🛠️ Set up the folder hierarchy to separate and delineate the concerns decided in the "Misc to-do" above. (Possibly an additional new private repo?)
+	- Approach decided in the enterprise repo docs; now the active implementation phase (folder renames + a new private repo).
 
 - ✅ Make opening menu look more like a menu. Better spacing around and in beteen items.
 	- Done: the startup picker is now a centred, bordered panel with margins instead of a full-screen list, and blank spacer rows sit between entries. Up/Down skip the spacers so the highlight only lands on real entries.
@@ -66,7 +67,7 @@ In each section, items are listed approximately from newest to oldest.
 	- Done: in the startup picker, `d` (or Delete) on a database asks to remove it, then - only if it has files on disk - a second confirm offers to delete those too (default keep). Remove just deregisters (drops the registry record); delete also removes the tx-log dir and record dir. The `.ddl` schema is always kept. Broken `[!]` records are removable; read-only system records are not.
 
 - 🛠️ Enterprise license validation scheme. Commonly used, phones home to verify active, allows N copies simultaneously. But doesn't fail if can't phone home for some time. Doesn't bind to specific hardware or anything.
-	- Scheme drafted in the enterprise repo (`research-license-validation.md`), awaiting owner decisions listed there.
+	- Scheme decided in the enterprise repo (`research-license-validation.md`); implementation is a later phase.
 
 - ✅ Exe name should be 'ngdb'.
 	- Done: the built binary and all user-facing references (CLI/TUI/web usage, version line, web title) are now `ngdb`; `cmd/nanogitdb` renamed to `cmd/ngdb`. The module path `nano-git-db` and the `NANOGITDB_USER`/`NANOGITDB_HOST` env vars are unchanged.
