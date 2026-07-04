@@ -77,6 +77,7 @@ func Run(args []string) error {
 	fmt.Println("    --tui [<ddl> <sqlite> <dir>]   terminal UI (no paths: pick/create a db)")
 	fmt.Println("    --serve [<ddl> <sqlite> <dir>] local web UI on 127.0.0.1:8765")
 	fmt.Println("    --script <f.lua> <ddl> <sqlite> <dir>   run a Lua script")
+	fmt.Println("    --version, -v                  print the version and exit")
 	fmt.Println("  schema and log:")
 	fmt.Println("    ddl <file>                     parse a DDL and print a summary")
 	fmt.Println("    build <ddl> <sqlite>           build/migrate a SQLite view from a DDL")

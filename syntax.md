@@ -347,6 +347,7 @@ nanogitdb <verb> ...            CLI (above)
 nanogitdb --tui  <ddl> <sqlite> <logdir>          terminal UI
 nanogitdb --serve <ddl> <sqlite> <logdir>         local web UI on 127.0.0.1:8765
 nanogitdb --script <file.lua> <ddl> <sqlite> <logdir>   run a Lua script (enterprise build)
+nanogitdb --version                               print the version and exit (also -v)
 ```
 
 The web UI binds to `127.0.0.1` only - that binding is the access control for a single-user local UI. All four front-ends share one core CRUD API, so they behave identically.
