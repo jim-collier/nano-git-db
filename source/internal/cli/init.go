@@ -33,7 +33,11 @@ func Init(args []string) error {
 	}
 	name := dbName(ddlPath)
 
-	logDir, err := initLogDir(args, name)
+	var arg string
+	if len(args) > 0 {
+		arg = args[0]
+	}
+	logDir, err := config.LogDirFor(arg, name)
 	if err != nil {
 		return err
 	}
@@ -101,41 +105,4 @@ func ensureKey(path string) error {
 func dbName(ddlPath string) string {
 	base := filepath.Base(ddlPath)
 	return strings.TrimSuffix(base, filepath.Ext(base))
-}
-
-// initLogDir resolves the tx-log location from the optional --init arg. A path
-// that is itself a git repo's top level gets the auto `ngdb/<name>` subfolder;
-// any other path is taken verbatim. With no arg, the enclosing repo's subfolder
-// is preferred, else the current directory (where the DDL already lives).
-func initLogDir(args []string, name string) (string, error) {
-	if len(args) > 0 && args[0] != "" {
-		p, err := filepath.Abs(args[0])
-		if err != nil {
-			return "", err
-		}
-		if root, ok := txlog.RepoRoot(p); ok && sameDir(root, p) {
-			return filepath.Join(root, "ngdb", name), nil
-		}
-		return p, nil
-	}
-	wd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	if root, ok := txlog.RepoRoot(wd); ok {
-		return filepath.Join(root, "ngdb", name), nil
-	}
-	return wd, nil
-}
-
-// sameDir reports whether two paths denote the same directory, resolving
-// symlinks where it can (a repo root reported by git may be canonicalized).
-func sameDir(a, b string) bool {
-	if ra, err := filepath.EvalSymlinks(a); err == nil {
-		a = ra
-	}
-	if rb, err := filepath.EvalSymlinks(b); err == nil {
-		b = rb
-	}
-	return filepath.Clean(a) == filepath.Clean(b)
 }
