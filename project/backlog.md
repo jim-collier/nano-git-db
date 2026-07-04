@@ -35,6 +35,7 @@ In each section, items are listed approximately from newest to oldest.
 | :--: | :--
 | 🔘   | Not started
 | 🛠️   | Started, and/or partially complete
+| ✋   | Defer
 | ✅   | Complete
 | 🚫   | Canceled
 
