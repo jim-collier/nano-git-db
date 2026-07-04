@@ -97,11 +97,35 @@ fAbout(){ { ((doQuietly)) || ((wasShown_About)); } && return; wasShown_About=1;
 fSyntax(){  { ((doQuietly)) || ((wasShown_Syntax)); } && return; wasShown_Syntax=1;
 	fEcho_Clean ""
 	#           X-------------------------------------------------------------------------------X
+	fEcho_Clean "Usage: ${meName} [options]"
+	fEcho_Clean "  -q, --quiet         Run unattended (no prompt) and quiet; flows to publish."
+	fEcho_Clean "  -m, --message MSG   Commit message for publish (also --msg; -m MSG or -m=MSG)."
+	fEcho_Clean "                      With -q and no -m, a message is auto-generated."
+	fEcho_Clean "  -h, --help          Show this."
+	fEcho_Clean "  -v, --version       Show version."
+	#           X-------------------------------------------------------------------------------X
 	fEcho_Clean "" ;:;}
 
 
 #••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 fMain(){
+
+	## Arguments: -q/--quiet (unattended + quiet, flows to publish), -m/--message
+	## (hands-off commit message; also --msg, accepts -m MSG or -m=MSG).
+	local cliMessage=""
+	while (($#)); do case "${1}" in
+		-q|--quiet)                doQuietly=1                          ; shift ;;
+		--message=*|--msg=*|-m=*)  cliMessage="${1#*=}"                 ; shift ;;
+		-m|--message|--msg)        cliMessage="${2-}"; shift; (($#)) && shift ;;
+		-h|--help)                 fCopyright; fAbout; fSyntax          ; return 0 ;;
+		-v|--version)              fVersion                             ; return 0 ;;
+		*) fThrowError "Unknown option: '${1}' (try --help)." ;;
+	esac; done
+
+	## Commit message: -m wins; else auto-generate when running quiet/unattended.
+	## An empty message when interactive lets the publish step open an editor.
+	local commitMessage="${cliMessage}"
+	if [[ -z "${commitMessage}" ]] && ((doQuietly)); then commitMessage="Updated"; fi
 
 	# Validate dependencies
 	fMustBeInPath realpath
@@ -126,14 +150,19 @@ fMain(){
 	if ((! doQuietly)); then
 		fCopyright
 		fAbout
-		fEcho_Clean "Source directory .............: ${dirPath_Source}"
+		note "Source directory .............: ${dirPath_Source}"
 		if ((isCompileProject)); then
-		fEcho_Clean "Executable to build ..........: ${filePath_ExecToTestAndInstall_BuildLocation}"
-		fEcho_Clean "Executable final location ....: ${filePath_ExecToTestAndInstall_FinalHome}"
-		fEcho_Clean "Win x86_64 zip location ......: ${filePath_Exec_Zip_Win_x86_64}"
+		note "Executable to build ..........: ${filePath_ExecToTestAndInstall_BuildLocation}"
+		note "Executable final location ....: ${filePath_ExecToTestAndInstall_FinalHome}"
+		note "Win x86_64 zip location ......: ${filePath_Exec_Zip_Win_x86_64}"
 		fi
-		fEcho_Clean "Test script ..................: ${filePath_CICD_TestExec}"
-		fEcho_Clean "Git commit and push script ...: ${gitAutomationScript}"
+		note "Test script ..................: ${filePath_CICD_TestExec}"
+		note "Git commit and push script ...: ${gitAutomationScript}"
+		if [[ -n "${commitMessage}" ]]; then
+		note "Publish commit message .......: \"${commitMessage}\""
+		else
+		note "Publish commit message .......: (interactive editor)"
+		fi
 		fIntroPromptToContinue  ""
 		fEcho_Clean
 	fi
@@ -148,17 +177,17 @@ fMain(){
 	if ((isCompileProject)); then
 
 		## Build (size-optimized native; build.bash owns the flags, vendor mode, and the bin/ output)
-		fEcho "$(date "+%Y%m%d-%H%M%S") build.bash: Starting ..."
+		step "Build (native, size-optimized)"
 		"${dirPath_Base}/cicd/build.bash"
 		## Minimal execution test: --version prints one line and exits, never opening the
 		## TUI. Running the app for real stays a separate manual step before the merge.
-		fEcho "$(date "+%Y%m%d-%H%M%S") Version check ..."
+		note "version check:"
 		"${filePath_ExecToTestAndInstall_BuildLocation}" --version
+		ok "built ${filePath_ExecToTestAndInstall_BuildLocation}"
 
-		fEcho_Force  ## blank line between major sections
 		## Cross-compile: pure Go, so every target builds here with no extra toolchains.
 		## build.bash names cross outputs bin/nanogitdb-<os>-<arch>[.exe].
-		fEcho "$(date "+%Y%m%d-%H%M%S") Cross-compile: Starting ..."
+		step "Cross-compile (win-amd64, linux-arm64, win-arm64)"
 		GOOS=windows GOARCH=amd64  "${dirPath_Base}/cicd/build.bash"
 		GOOS=linux   GOARCH=arm64  "${dirPath_Base}/cicd/build.bash"
 		GOOS=windows GOARCH=arm64  "${dirPath_Base}/cicd/build.bash"
@@ -168,66 +197,67 @@ fMain(){
 		[[ ! -d "${dirPath_Base}/dist" ]]  &&  mkdir -p "${dirPath_Base}/dist"
 		rm -f "${filePath_Exec_Zip_Win_x86_64}"
 		( cd "${dirPath_Base}/bin"  &&  zip -q9 "../dist/$(basename "${filePath_Exec_Zip_Win_x86_64}")" "${exeName}-windows-amd64.exe" )
-		fEcho "$(date "+%Y%m%d-%H%M%S") Packaged: ${filePath_Exec_Zip_Win_x86_64}"
+		ok "packaged ${filePath_Exec_Zip_Win_x86_64}"
 
 	fi
 
-	fEcho_Force  ## blank line between major sections
 	## Test
-	fEcho "$(date "+%Y%m%d-%H%M%S") Test: Starting ..."
+	step "Tests"
 	"${filePath_CICD_TestExec}"
-	fEcho_ResetBlankCounter
+	ok "tests passed"
 
-	fEcho_Force  ## blank line between major sections
 	## Supply-chain checks (need network for the tool/vuln db; the offline
 	## checks all live in test.bash). Real findings fail the pipeline.
-	fEcho "$(date "+%Y%m%d-%H%M%S") go mod verify + govulncheck: Starting ..."
+	step "Supply-chain (go mod verify + govulncheck)"
 	( cd "${dirPath_Source}"  &&  go mod verify )
 	( cd "${dirPath_Source}"  &&  GOFLAGS=  go run golang.org/x/vuln/cmd/govulncheck@latest ./... )
+	ok "module verified, no known vulnerabilities"
 
 	popd 1>/dev/null
 
-	fEcho_Force  ## blank line between major sections
 	## Install locally (dogfood it)
+	step "Dogfood (install locally)"
 
 	## Linux x86_64
 	for nextPath in "${preferredInstallPaths_Linux_x8664[@]}"; do
 		if [[ -d "${nextPath}" ]]; then
-			fEcho; fEcho "$(date "+%Y%m%d-%H%M%S") Copying '${filePath_ExecToTestAndInstall_FinalHome}' to '${nextPath}' ..."
+			note "copying ${filePath_ExecToTestAndInstall_FinalHome} -> ${nextPath%%/}/"
 			if { ! cp -av --update=older --reflink=auto "${filePath_ExecToTestAndInstall_FinalHome}"  "${nextPath%%/}/"; }  &&  [[ "${nextPath}" != "${HOME}/"* ]]; then
 				sudo cp -av --update=older --reflink=auto "${filePath_ExecToTestAndInstall_FinalHome}"  "${nextPath%%/}/"
 			fi
-			fEcho; fEcho "ls \$(which '$(basename "${filePath_ExecToTestAndInstall_FinalHome}")'):"
 			ls  -lA  --color=always  --human-readable  --time-style=+"%Y-%m-%d %H:%M:%S"  "$(which "$(basename "${filePath_ExecToTestAndInstall_FinalHome}")")"
-			fEcho_Force
+			ok "installed (linux x86_64) -> ${nextPath%%/}/"
 			break
 		fi
 	done;:
 
 	## Windows x86_64
 	if [[ ! -f "${filePath_Exec_Zip_Win_x86_64}" ]]; then
-		fEcho; fEcho "WARNING - Not found: '${filePath_Exec_Zip_Win_x86_64}'."; fEcho
+		warn "not found: ${filePath_Exec_Zip_Win_x86_64}"
 	else
 		for nextPath in "${preferredInstallPaths_Win_x8664[@]}"; do
 			if [[ -d "${nextPath}" ]]; then
-			fEcho; fEcho "$(date "+%Y%m%d-%H%M%S") Extracting '${filePath_Exec_Zip_Win_x86_64}' to '${nextPath}' ..."
+				note "extracting ${filePath_Exec_Zip_Win_x86_64} -> ${nextPath%%/}"
 				if { ! unzip -u -o  "${filePath_Exec_Zip_Win_x86_64}"  -d  "${nextPath%%/}"; }  &&  [[ "${nextPath}" != "${HOME}/"* ]]; then
 					sudo unzip -u -o  "${filePath_Exec_Zip_Win_x86_64}"  -d  "${nextPath%%/}"
 				fi
-				fEcho; fEcho "ls '${nextPath%%/}/${exeName}/'*:"
 				ls  -lA  --color=always  --human-readable  --time-style=+"%Y-%m-%d %H:%M:%S"  "${nextPath%%/}/${exeName}"*
-				fEcho_Force
+				ok "installed (windows x86_64) -> ${nextPath%%/}/"
 				break
 			fi
 		done;:
 	fi
 
-	fEcho_Force  ## blank line between major sections
-	## Git automation script (e.g. commit, push)
-	"${gitAutomationScript}"
+	## Git automation script (backup, commit, push). Flow the quiet flag and the
+	## resolved commit message through so an unattended run stays hands-off.
+	step "Backup + publish"
+	local -a gitArgs=()
+	if ((doQuietly));                then gitArgs+=(--quiet); fi
+	if [[ -n "${commitMessage}" ]];  then gitArgs+=("--message=${commitMessage}"); fi
+	"${gitAutomationScript}"  "${gitArgs[@]}"
 
 	## Done
-	((! doQuietly)) && { fEcho "${meName}: Done."; fEcho; }
+	hr; printf '%s%s CI/CD: done.%s\n' "${grn}${b}" "${exeName}" "${rst}"
 }
 
 
@@ -357,6 +387,16 @@ fEcho()              { { [[ -z "${1:-}" ]] && fEcho_Clean ""; } || { local -r to
 fEcho_Force()        { _wasLastEchoBlank=0; fEcho "${1:-}"; }
 fEcho_Clean_Force()  { _wasLastEchoBlank=0; local -r toEcho="${1:-}"; fEcho_Clean_byref toEcho; }
 
+## Stage output (visual style borrowed from the silkterm cicd): a dim rule as the
+## section delimiter, a bold timestamped header per stage, indented notes below.
+b=$'\e[1m'; dim=$'\e[2m'; grn=$'\e[32m'; ylw=$'\e[33m'; red=$'\e[31m'; rst=$'\e[0m'
+hr(){   echo; printf '%s\n' "${dim}••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••${rst}"; }
+step(){ hr; printf '%s[ %s ] %s%s\n' "${b}" "$(date +%H:%M:%S)" "$*" "${rst}"; }
+note(){ printf '  %s\n' "$*"; }
+ok(){   printf '%s  OK: %s%s\n' "${grn}" "$*" "${rst}"; }
+warn(){ printf '%s  WARN: %s%s\n' "${ylw}" "$*" "${rst}" >&2; }
+die(){  printf '\n%sCICD FAILED: %s%s\n' "${red}" "$*" "${rst}" >&2; exit 1; }
+
 ## Error-handling
 declare -i _wasCleanupRun=0  ## Managed internally by this suite.
 declare -i _doExitOnThrow=0    ## Managed internally by this suite.
@@ -472,3 +512,4 @@ fMain  "${@}"
 ##		- 20260701 JC: Wired cross-compile (win-amd64, linux-arm64, win-arm64), the windows zip, and govulncheck.
 ##		- 20260703 JC: Replaced the post-build bare launch (which opened the TUI) with a --version check. Fixed the git-automation script path - it was missing the base prefix and doubled the cicd/ segment.
 ##		- 20260703 JC: Blank line between major stages for readability.
+##		- 20260704 JC: Added -q/--quiet (unattended, flows to publish) and -m/--message (auto-generated under -q); adopted the silkterm stage-output style (dim rule delimiter, timestamped headers, indented notes).

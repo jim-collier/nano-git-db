@@ -65,7 +65,9 @@ fSyntax(){  { ((doQuietly)) || ((wasShown_Syntax)); } && return; wasShown_Syntax
 	fEcho_Clean ""
 	#           X-------------------------------------------------------------------------------X
 	fEcho_Clean "Arguments:"
-	fEcho_Clean "  --quiet [optional]: Be less verbose, and don't prompt user to continue."
+	fEcho_Clean "  --quiet, -q [optional]: Be less verbose, and don't prompt user to continue."
+	fEcho_Clean "  --message, --msg, -m [optional]: Commit message (-m MSG or -m=MSG)."
+	fEcho_Clean "                                  Auto-generated when --quiet and no message."
 	fEcho_Clean "  --help, --version [or -h, -v]"
 	fEcho_Clean ""
 	fEcho_Clean "Expected folder structure - something like:"
@@ -88,21 +90,25 @@ fMain(){
 	## Generic variables
 	local -i wasShown_Copyright=0; local -i wasShown_About=0; wasShown_Syntax=0
 
-	## Check for need to show help
-	{ ((atLeastOneArgRequired)) && [[ -z "${1:-}${2:-}${3:-}${4:-}" ]]; } && { fCopyright; fAbout; fSyntax; return 1; }
-	case " ${*,,} " in
-		*" -h "*|*" --help "*)                 fCopyright; fAbout; fSyntax; return 0; ;;
-		*" -v "*|*" --ver "*|*" --version "*)  fCopyright;                  return 0; ;;
-		*" -q "*|*" --quiet "*)                doQuiet=1;                             ;;
-	esac
+	## Arguments: -q/--quiet (no prompt), -m/--message/--msg (commit message;
+	## -m MSG or -m=MSG), -h/--help, -v/--version.
+	local commitMessage=""
+	while (($#)); do case "${1}" in
+		-q|--quiet)                doQuietly=1                          ; shift ;;
+		--message=*|--msg=*|-m=*)  commitMessage="${1#*=}"              ; shift ;;
+		-m|--message|--msg)        commitMessage="${2-}"; shift; (($#)) && shift ;;
+		-h|--help)                 fCopyright; fAbout; fSyntax          ; return 0 ;;
+		-v|--ver|--version)        fCopyright                          ; return 0 ;;
+		*) fThrowError "Unexpected option: '${1}' (try --help)." ;;
+	esac; done
+
+	## Auto-generate a commit message when quiet and none was given, so an
+	## unattended publish never blocks on the commit-message editor.
+	if [[ -z "${commitMessage}" ]] && ((doQuietly)); then commitMessage="Updated"; fi
 
 	## Validate dependencies
 	fMustBeInPath rar
 	fMustBeInPath git
-
-	## Arguments
-	local -ri parseArgs_maxPositionalArgCount=1  ## Variable expected by fParseArgs()
-	fParseArgs  "${@}"
 
 	## Settings; relative paths
 	local -r dirPath_GitProj="."
@@ -179,7 +185,8 @@ fMain(){
 	## has nothing to pull; the push below sets its upstream on first publish.
 	if git rev-parse --abbrev-ref @{u} >/dev/null 2>&1; then
 		fEcho; fEcho "git pull --no-ff ..."
-		git pull --no-ff
+		## --no-edit when quiet so a merge commit doesn't pop the editor.
+		if ((doQuietly)); then git pull --no-ff --no-edit; else git pull --no-ff; fi
 	fi
 
 	## Stash pop
@@ -194,7 +201,8 @@ fMain(){
 
 	if ! git diff --cached --quiet; then
 		fEcho; fEcho "git commit ..."
-		git commit
+		## -m keeps it hands-off; no message means an interactive editor.
+		if [[ -n "${commitMessage}" ]]; then git commit -m "${commitMessage}"; else git commit; fi
 	fi
 
 	# Push only if we're ahead of the remote
@@ -216,114 +224,6 @@ fCleanup(){
 		fEcho_Clean
 #	fi
 }
-
-
-#•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
-fParseArgs(){
-
-	## Look for stars "✶✶✶✶✶✶✶✶" for places to custom-modify unique instances of this function.
-
-	## GENERIC (don't modify): Populate args array and string. (This has been updated in template to just use "${@}" and not a new array. Leave this one be though.)
-	## Note: Args are 1-based index, but the resulting array of args at the end is a normal 0-based index.
-	local -r -i maxPracticalArgCount=50  ## In Bash we have 2MB of args, or somewhere around 10k by count. For readabality and performance, keep it MUCH lower, say ~20-99.
-	local    -i totalArgCount=0
-	local    -i switchCounter=0
-	local -a    allArgsArr=()
-	## Store the highest non-empty argument number.
-	local -i i; i=0
-	for ((i=1; i<=maxPracticalArgCount; i++)); do [[ -n "${!i:-}" ]] && totalArgCount=$i; done
-	local -ri totalArgCount=$totalArgCount
-	## Build args str and array, including empty args - up to the last non-empty arg.
-	local thisStr=""
-	for ((i=1; i<=totalArgCount; i++)); do
-		thisStr="${!i}"
-		thisStr="${thisStr//\"/″}"; thisStr="${thisStr//\'/′}"
-		allArgsArr+=("${thisStr}")
-	done
-
-	## GENERIC: Variables for loop
-	local    tmpStr=""
-	local    currentArg=""
-	local    lastSwitch=""
-	local -i expectingSwitchParamForNextArg=0
-	local -i positionalArgCounter=0
-
-	## Process arguments
-	for currentArg in "${allArgsArr[@]}"; do
-		#fEcho_Clean "Debug: currentArg ........: '${currentArg}'"
-
-		## Test if an option switch or not
-		if [[ -n "$(echo "${currentArg}" | grep -P "^\-(\-?)[^\ \-]" 2>/dev/null || true)" ]]; then
-			## It's an option (either unary or long-option, we don't know yet)
-			#fEcho_Clean "Debug: option ............: '${currentArg}'"
-
-			## Check if this was supposed to NOT be a unary switch (eg expecting a parameter after previous long-option)
-			((expectingSwitchParamForNextArg)) && fThrowError "Expecting a long-option argument for '${lastSwitch}', instead got another option '${currentArg}'."
-			switchCounter=$((switchCounter + 1))
-
-			## Validate switches, and act on unary switches
-			lastSwitchAsPassed="${currentArg}"
-			tmpStr="${currentArg,,}"
-
-			## Strip switch dashes off
-			while [[ "${tmpStr}" == -* ]]; do tmpStr="${tmpStr#-}"; done
-			lastSwitch="${tmpStr}" ## Remember lastSwitch
-
-			case "${tmpStr}" in
-
-			#	## ✶✶✶✶✶✶✶✶ PUT CUSTOM UNARY SWITCH TESTS AND PARENT BOOLEAN VARIABLE ASSIGNMENTS HERE
-			#	"unary-switch")  booleanVariable=1  ;;
-
-			#	## ✶✶✶✶✶✶✶✶ PUT TESTS FOR CUSTOM LONG-OPTION LOGIC THAT EXPECTS AN ARGUMENT TO FOLLOW, HERE
-			#	"long-option-with-arg-to-follow") expectingSwitchParamForNextArg=1 ;;
-
-				## ¯\_(ツ)_/¯
-				*) fThrowError  "Unexpected option in this context: '${currentArg}'."  ;;
-
-			esac
-		else
-			## It's not an option switch; could be a long-option argument, or a positional arg
-
-			if ((expectingSwitchParamForNextArg)); then :
-				## Now we know to expecting an long-option argument
-				#fEcho_Clean "Debug: arg for long-option: '${lastSwitch}': '${currentArg}'"
-
-			#	## ✶✶✶✶✶✶✶✶ PUT CUSTOM LONG-OPTION ARGUMENT TESTS AND PARENT VARIABLE ASSIGNMENTS HERE
-			#	case "${lastSwitch,,}" in
-			#		"long-option-with-arg-to-follow") someParentVariable="${currentArg}" ;;
-			#		*)                                fThrowError "Unkown option: '${lastSwitchAsPassed}', current parameter: '${currentArg}'." ;;  ## A redundant check.
-			#	esac
-			#	expectingSwitchParamForNextArg=0
-
-			else
-				## Well it must be a positional arg then.
-				positionalArgCounter=$((positionalArgCounter + 1))
-				((positionalArgCounter > parseArgs_maxPositionalArgCount))  && fThrowError "Too many positional arguments: ${positionalArgCounter}, for max of ${parseArgs_maxPositionalArgCount}."
-				#fEcho_Clean "Debug: positional arg #${positionalArgCounter}: '${currentArg}'"
-
-				## ✶✶✶✶✶✶✶✶ PUT CUSTOM POSITIONAL ARG LOGIC HERE (only use one of the following methods, delete the other)
-
-				## Assign parent variables; Method 1: argument counter (less flexible but best for simple input)
-				case $positionalArgCounter in
-					1) stringArg="${currentArg}"      ;;
-					2) arg_intArg="${currentArg}" ;;
-					*) fThrowError "Unexpected positional argument # ${positionalArgCounter}: '${currentArg}'." ;;
-				esac
-
-			fi
-		fi
-	done
-	((expectingSwitchParamForNextArg)) && fThrowError "Never received a parameter for switch '--${lastSwitch}'."
-
-:;}  ## 'true' has to be the last thing or this function errors [the joys of the mysterious 'set -e'].
-
-
-
-
-
-
-
-
 
 
 #•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
@@ -477,3 +377,7 @@ fMain  "${@}"
 ##			- Added check of environment variable 'N8GIT_BACKUP_AND_PUBLISH_NOBACKUP'.
 ##		- 20260628 JC:
 ##			- Call gfs-rotate.bash to prune old backups (GFS retention).
+##		- 20260704 JC:
+##			- Real arg parsing for -q/--quiet (fixed the old no-op) and -m/--message/--msg (-m MSG or -m=MSG); auto-message under --quiet.
+##			- --quiet now flows to git: pull --no-edit, commit -m so an unattended publish never opens an editor.
+##			- Dropped the unused fParseArgs template block.
