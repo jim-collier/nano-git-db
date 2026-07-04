@@ -351,6 +351,8 @@ nanogitdb --script <file.lua> <ddl> <sqlite> <logdir>   run a Lua script (enterp
 
 The web UI binds to `127.0.0.1` only - that binding is the access control for a single-user local UI. All four front-ends share one core CRUD API, so they behave identically.
 
+In the TUI, press `T` to pick a colour theme (three dark, three light; the default is dark). Themes use fixed colours for readability regardless of your terminal palette, and the choice is remembered for next time.
+
 ## Startup discovery and the database registry
 
 When `--tui` or a bare `nanogitdb` is run without the explicit triple, it finds a database instead of erroring:
