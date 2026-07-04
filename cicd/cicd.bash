@@ -267,6 +267,20 @@ fMain(){
 		done;:
 	fi
 
+	## Optional local hooks (not in the repo). Any private/hooks/claude/*.bash run
+	## here, before publish, so anything a hook regenerates gets committed in the
+	## same run. No-op when the folder is absent. A hook gets the repo base path as
+	## $1; a failing hook warns but does not abort the run.
+	declare hooksDir="${dirPath_Base}/../private/hooks/claude"
+	if [[ -d "${hooksDir}" ]]; then
+		fEcho_Clean; fEcho "Local hooks"
+		for nextHook in "${hooksDir}"/*.bash; do
+			[[ -f "${nextHook}" ]]  ||  continue
+			fEcho_Clean "running $(basename "${nextHook}")"
+			bash "${nextHook}" "${dirPath_Base}"  ||  fEcho_Clean "hook failed (continuing): $(basename "${nextHook}")"
+		done
+	fi
+
 	## Git automation script (backup, commit, push). Flow the quiet flag and the
 	## resolved commit message through so an unattended run stays hands-off.
 	fEcho_Clean; fEcho "Backup + publish"
