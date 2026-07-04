@@ -147,20 +147,20 @@ func (s *Syncer) Run(ctx context.Context, onErr func(error)) {
 // ensureUnionAttr sets the log file to merge as a union, so two clients' appends
 // combine instead of conflicting.
 func ensureUnionAttr(dir, rel string) error {
-	p := filepath.Join(dir, ".gitattributes")
+	path := filepath.Join(dir, ".gitattributes")
 	// txlog-*.csv: GC segments are write-once, but two clients collecting
 	// concurrently both delete the old files - union keeps that automerging.
 	for _, line := range []string{rel + " merge=union", "txlog-*.csv merge=union"} {
-		b, err := os.ReadFile(p)
+		b, err := os.ReadFile(path)
 		if err == nil && strings.Contains(string(b), line) {
 			continue
 		}
-		f, err := os.OpenFile(p, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 		if err != nil {
 			return err
 		}
-		_, err = fmt.Fprintln(f, line)
-		f.Close()
+		_, err = fmt.Fprintln(file, line)
+		file.Close()
 		if err != nil {
 			return err
 		}

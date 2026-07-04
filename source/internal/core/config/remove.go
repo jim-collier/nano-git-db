@@ -26,11 +26,11 @@ func (c *DBConfig) Deregister() error {
 // even offer the "also delete the files" step. The DDL is excluded: it is the
 // user's authored schema, not something this tool created.
 func (c *DBConfig) HasFiles() bool {
-	for _, p := range []string{c.LogDir, c.SQLitePath, c.KeyFile} {
-		if p == "" {
+	for _, path := range []string{c.LogDir, c.SQLitePath, c.KeyFile} {
+		if path == "" {
 			continue
 		}
-		if _, err := os.Stat(p); err == nil {
+		if _, err := os.Stat(path); err == nil {
 			return true
 		}
 	}

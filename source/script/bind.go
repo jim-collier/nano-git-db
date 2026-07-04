@@ -40,13 +40,13 @@ func (d apiDB) AttachURI(table, id, uri, desc string) (string, error) {
 	return d.api.AttachURI(table, id, uri, desc)
 }
 func (d apiDB) AttachmentsFor(table, id string) ([]Attachment, error) {
-	as, err := d.api.AttachmentsFor(table, id)
+	atts, err := d.api.AttachmentsFor(table, id)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Attachment, len(as))
-	for i, a := range as {
-		out[i] = Attachment{ID: a.ID, Kind: a.Kind, Label: a.Label, Description: a.Description}
+	out := make([]Attachment, len(atts))
+	for i, att := range atts {
+		out[i] = Attachment{ID: att.ID, Kind: att.Kind, Label: att.Label, Description: att.Description}
 	}
 	return out, nil
 }
@@ -63,13 +63,13 @@ func collect(schemas ...*ddl.Schema) CodeSet {
 		Table: map[string]map[string]string{},
 		Field: map[string]map[string]map[string]string{},
 	}
-	for _, s := range schemas {
-		for k, fn := range s.AppCode {
+	for _, sch := range schemas {
+		for k, fn := range sch.AppCode {
 			if cs.App[k] == "" {
 				cs.App[k] = fn
 			}
 		}
-		for _, tb := range s.Tables {
+		for _, tb := range sch.Tables {
 			if cs.Table[tb.Name] == nil && len(tb.Code) > 0 {
 				m := map[string]string{}
 				for k, fn := range tb.Code {

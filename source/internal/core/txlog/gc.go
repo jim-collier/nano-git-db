@@ -39,30 +39,30 @@ func GC(entries []Entry, cutoff string) (keep []Entry, collected int) {
 		maxDate string
 	}
 	rows := map[string]*rowState{}
-	for _, e := range sorted {
-		k := e.Table + "\x00" + e.RowID
-		s := rows[k]
-		if s == nil {
-			s = &rowState{}
-			rows[k] = s
+	for _, entry := range sorted {
+		key := entry.Table + "\x00" + entry.RowID
+		state := rows[key]
+		if state == nil {
+			state = &rowState{}
+			rows[key] = state
 		}
-		switch e.Op {
+		switch entry.Op {
 		case "create":
-			s.dead = false
+			state.dead = false
 		case "delete":
-			s.dead = true
+			state.dead = true
 		}
-		if e.Date > s.maxDate {
-			s.maxDate = e.Date
+		if entry.Date > state.maxDate {
+			state.maxDate = entry.Date
 		}
 	}
-	for _, e := range entries {
-		s := rows[e.Table+"\x00"+e.RowID]
-		if s.dead && s.maxDate < cutoff {
+	for _, entry := range entries {
+		state := rows[entry.Table+"\x00"+entry.RowID]
+		if state.dead && state.maxDate < cutoff {
 			collected++
 			continue
 		}
-		keep = append(keep, e)
+		keep = append(keep, entry)
 	}
 	return keep, collected
 }
@@ -82,8 +82,8 @@ func (l *Log) Rotate(keep []Entry) (string, error) {
 	if err := w.Write(header); err != nil {
 		return "", err
 	}
-	for _, e := range keep {
-		if err := w.Write(e.record()); err != nil {
+	for _, entry := range keep {
+		if err := w.Write(entry.record()); err != nil {
 			return "", err
 		}
 	}
@@ -100,8 +100,8 @@ func (l *Log) Rotate(keep []Entry) (string, error) {
 	if err := os.WriteFile(seg, buf.Bytes(), 0o644); err != nil {
 		return "", err
 	}
-	for _, p := range old {
-		if err := os.Remove(p); err != nil {
+	for _, path := range old {
+		if err := os.Remove(path); err != nil {
 			return seg, err
 		}
 	}

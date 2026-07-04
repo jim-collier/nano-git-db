@@ -42,23 +42,23 @@ func RenameTable(src []byte, oldName, newName string) ([]byte, bool) {
 func RenameField(src []byte, table, oldName, newName string) ([]byte, bool) {
 	lines := strings.Split(string(src), "\n")
 	found, aliased := false, false
-	tblIndent := -1 // >=0 while inside the target table's block
+	tableIndent := -1 // >=0 while inside the target table's block
 	for i := 0; i < len(lines); i++ {
 		key, val, ok := lineKeyVal(lines[i])
 		if !ok {
 			continue // blank/comment-only lines never close a block
 		}
-		ind := indentWidth(lines[i])
-		if tblIndent >= 0 && ind <= tblIndent {
-			tblIndent = -1
+		indent := indentWidth(lines[i])
+		if tableIndent >= 0 && indent <= tableIndent {
+			tableIndent = -1
 		}
 		if key == "table" {
 			if val == table {
-				tblIndent = ind
+				tableIndent = indent
 			}
 			continue
 		}
-		if tblIndent < 0 || key != "field" || val != oldName {
+		if tableIndent < 0 || key != "field" || val != oldName {
 			continue
 		}
 		lines[i] = replaceLineValue(lines[i], newName)
@@ -78,20 +78,20 @@ func RenameField(src []byte, table, oldName, newName string) ([]byte, bool) {
 // lineKeyVal parses one line's `key: value` (comment stripped, value
 // unquoted); ok is false for blank, comment-only, or bare-list lines.
 func lineKeyVal(line string) (key, val string, ok bool) {
-	out, _ := stripComment(line)
-	content := strings.TrimSpace(out)
+	stripped, _ := stripComment(line)
+	content := strings.TrimSpace(stripped)
 	if content == "" {
 		return "", "", false
 	}
-	p := findColon(content)
-	if p < 0 {
+	colon := findColon(content)
+	if colon < 0 {
 		return "", "", false
 	}
-	key = strings.TrimSpace(content[:p])
+	key = strings.TrimSpace(content[:colon])
 	if !isPathKey(key) {
 		return "", "", false
 	}
-	val, _ = Unquote(strings.TrimSpace(content[p+1:]))
+	val, _ = Unquote(strings.TrimSpace(content[colon+1:]))
 	return key, val, true
 }
 
@@ -102,23 +102,23 @@ func indentWidth(line string) int {
 // replaceLineValue swaps the value after the first colon, preserving the
 // key, its indentation, and any trailing comment.
 func replaceLineValue(line, newVal string) string {
-	out, _ := stripComment(line)
-	comment := line[len(out):]
-	p := findColon(out)
+	stripped, _ := stripComment(line)
+	comment := line[len(stripped):]
+	colon := findColon(stripped)
 	if !isIdent(newVal) {
 		newVal = `"` + newVal + `"`
 	}
-	res := out[:p+1] + " " + newVal
+	result := stripped[:colon+1] + " " + newVal
 	if comment != "" {
-		res += "  " + strings.TrimLeft(comment, " ")
+		result += "  " + strings.TrimLeft(comment, " ")
 	}
-	return res
+	return result
 }
 
 // addAlias records the old name on the entity at lines[i]: extends its
 // existing aliases: child, or inserts one as the first child.
 func addAlias(lines []string, i int, oldName string) []string {
-	entIndent := indentWidth(lines[i])
+	entityIndent := indentWidth(lines[i])
 	alias := oldName
 	if !isIdent(alias) {
 		alias = `"` + alias + `"`
@@ -129,22 +129,22 @@ func addAlias(lines []string, i int, oldName string) []string {
 		if !ok {
 			continue // blank/comment/list lines neither close nor anchor
 		}
-		ind := indentWidth(lines[j])
-		if ind <= entIndent {
+		indent := indentWidth(lines[j])
+		if indent <= entityIndent {
 			break
 		}
 		if childIndent == "" {
-			childIndent = lines[j][:ind] // first child sets the direct-child level
+			childIndent = lines[j][:indent] // first child sets the direct-child level
 		}
-		if ind == len(childIndent) && key == "aliases" {
-			out, _ := stripComment(lines[j])
-			comment := lines[j][len(out):]
-			p := findColon(out)
-			cur := strings.TrimSpace(out[p+1:])
-			if cur == "" {
-				lines[j] = out[:p+1] + " " + alias
+		if indent == len(childIndent) && key == "aliases" {
+			stripped, _ := stripComment(lines[j])
+			comment := lines[j][len(stripped):]
+			colon := findColon(stripped)
+			current := strings.TrimSpace(stripped[colon+1:])
+			if current == "" {
+				lines[j] = stripped[:colon+1] + " " + alias
 			} else {
-				lines[j] = strings.TrimRight(out, " \t") + ", " + alias
+				lines[j] = strings.TrimRight(stripped, " \t") + ", " + alias
 			}
 			if comment != "" {
 				lines[j] += "  " + strings.TrimLeft(comment, " ")
@@ -153,8 +153,8 @@ func addAlias(lines []string, i int, oldName string) []string {
 		}
 	}
 	if childIndent == "" {
-		childIndent = lines[i][:entIndent] + "\t"
+		childIndent = lines[i][:entityIndent] + "\t"
 	}
-	ins := childIndent + "aliases: " + alias
-	return append(lines[:i+1], append([]string{ins}, lines[i+1:]...)...)
+	newLine := childIndent + "aliases: " + alias
+	return append(lines[:i+1], append([]string{newLine}, lines[i+1:]...)...)
 }

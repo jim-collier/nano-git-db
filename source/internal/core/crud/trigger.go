@@ -26,12 +26,12 @@ func (a *API) runBefore(table, id string, fields map[string]string) (map[string]
 		return fields, nil
 	}
 	out := make(map[string]string, len(fields))
-	for _, f := range sortedKeys(fields) {
-		v, err := a.Trigger.BeforeField(table, f, fields[f])
+	for _, field := range sortedKeys(fields) {
+		value, err := a.Trigger.BeforeField(table, field, fields[field])
 		if err != nil {
 			return nil, err
 		}
-		out[f] = v
+		out[field] = value
 	}
 	if err := a.Trigger.BeforeUpdate(table, id, out); err != nil {
 		return nil, err
@@ -43,8 +43,8 @@ func (a *API) runAfter(table, id string, fields map[string]string) {
 	if a.Trigger == nil {
 		return
 	}
-	for _, f := range sortedKeys(fields) {
-		a.Trigger.AfterField(table, id, f, fields[f])
+	for _, field := range sortedKeys(fields) {
+		a.Trigger.AfterField(table, id, field, fields[field])
 	}
 	a.Trigger.AfterUpdate(table, id)
 }

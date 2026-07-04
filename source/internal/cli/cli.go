@@ -111,16 +111,16 @@ func Run(args []string) error {
 // dumpDDL parses a DDL file and prints a short summary - a stand-in until the
 // real CRUD CLI lands, and a handy parser smoke test.
 func dumpDDL(path string) error {
-	s, err := ddl.ParseFile(path)
+	sch, err := ddl.ParseFile(path)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("tables=%d relationships=%d views=%d\n", len(s.Tables), len(s.Relations), len(s.Views))
-	for _, t := range s.Tables {
+	fmt.Printf("tables=%d relationships=%d views=%d\n", len(sch.Tables), len(sch.Relations), len(sch.Views))
+	for _, t := range sch.Tables {
 		fmt.Printf("  table %q: fields=%d uniques=%d indexes=%d\n",
 			t.Name, len(t.Fields), len(t.Uniques), len(t.Indexes))
 	}
-	for _, w := range s.Warnings {
+	for _, w := range sch.Warnings {
 		fmt.Println("  warning:", w)
 	}
 	return nil
@@ -128,7 +128,7 @@ func dumpDDL(path string) error {
 
 // buildDB parses a DDL and builds (or updates) the SQLite view at dbPath.
 func buildDB(ddlPath, dbPath string) error {
-	s, err := ddl.ParseFile(ddlPath)
+	sch, err := ddl.ParseFile(ddlPath)
 	if err != nil {
 		return err
 	}
@@ -137,15 +137,15 @@ func buildDB(ddlPath, dbPath string) error {
 		return err
 	}
 	defer st.Close()
-	if err := st.Build(s); err != nil {
+	if err := st.Build(sch); err != nil {
 		return err
 	}
-	bw, err := schema.Bootstrap(st, s)
+	bootWarns, err := schema.Bootstrap(st, sch)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("built %d table(s) plus built-ins into %s\n", len(s.Tables), dbPath)
-	for _, w := range append(s.Warnings, bw...) {
+	fmt.Printf("built %d table(s) plus built-ins into %s\n", len(sch.Tables), dbPath)
+	for _, w := range append(sch.Warnings, bootWarns...) {
 		fmt.Println("  warning:", w)
 	}
 	fmt.Println("  note: default groups get seeded by replay/sync (they are log-first)")
@@ -156,7 +156,7 @@ func buildDB(ddlPath, dbPath string) error {
 // every logged entry. Demonstrates the core thesis - the log is the truth, the
 // SQLite file is a derived, rebuildable view.
 func replay(ddlPath, dbPath, logDir string) error {
-	s, err := ddl.ParseFile(ddlPath)
+	sch, err := ddl.ParseFile(ddlPath)
 	if err != nil {
 		return err
 	}
@@ -165,10 +165,10 @@ func replay(ddlPath, dbPath, logDir string) error {
 		return err
 	}
 	defer st.Close()
-	if err := st.Build(s); err != nil {
+	if err := st.Build(sch); err != nil {
 		return err
 	}
-	bw, err := schema.Bootstrap(st, s)
+	bootWarns, err := schema.Bootstrap(st, sch)
 	if err != nil {
 		return err
 	}
@@ -176,12 +176,12 @@ func replay(ddlPath, dbPath, logDir string) error {
 	if err != nil {
 		return err
 	}
-	entries, rw, err := lg.ReadAll()
+	entries, readWarns, err := lg.ReadAll()
 	if err != nil {
 		return err
 	}
-	if bs, err := schema.Builtins(); err == nil {
-		schema.ApplyAliases(entries, s, bs) // pre-rename entries -> current names
+	if builtins, err := schema.Builtins(); err == nil {
+		schema.ApplyAliases(entries, sch, builtins) // pre-rename entries -> current names
 	}
 	// Decrypt field values before applying, using this DDL's registered key
 	// (else a key beside the DDL); unreadable ones stay empty in the view.
@@ -197,7 +197,7 @@ func replay(ddlPath, dbPath, logDir string) error {
 	if err != nil {
 		return err
 	}
-	warns = append(rw, warns...)
+	warns = append(readWarns, warns...)
 	// Seed AFTER the replay: an already-seeded log has just filled groups, so
 	// this is a no-op everywhere but on a brand-new database.
 	api := crud.New(st, lg)
@@ -206,10 +206,10 @@ func replay(ddlPath, dbPath, logDir string) error {
 		return err
 	}
 	fmt.Printf("applied %d log entr%s into %s\n", len(entries), plural(len(entries)), dbPath)
-	for _, w := range append(bw, warns...) {
+	for _, w := range append(bootWarns, warns...) {
 		fmt.Println("  warning:", w)
 	}
-	for _, t := range s.Tables {
+	for _, t := range sch.Tables {
 		var live int
 		if err := st.DB().QueryRow(
 			`SELECT COUNT(*) FROM ` + quoteIdent(t.Name) + ` WHERE "is_deleted"=0`).Scan(&live); err == nil {
@@ -219,8 +219,8 @@ func replay(ddlPath, dbPath, logDir string) error {
 	return nil
 }
 
-func quoteIdent(s string) string {
-	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+func quoteIdent(ident string) string {
+	return `"` + strings.ReplaceAll(ident, `"`, `""`) + `"`
 }
 
 func plural(n int) string {
@@ -269,7 +269,7 @@ func syncAndReplay(ddlPath, dbPath, logDir string) error {
 // current), open the log. It does NOT replay - keeping the view current across
 // clients is what replay/sync are for. Callers must Close the store.
 func openAPI(paths []string) (*store.Store, *crud.API, error) {
-	s, err := ddl.ParseFile(paths[0])
+	sch, err := ddl.ParseFile(paths[0])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -277,11 +277,11 @@ func openAPI(paths []string) (*store.Store, *crud.API, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := st.Build(s); err != nil {
+	if err := st.Build(sch); err != nil {
 		st.Close()
 		return nil, nil, err
 	}
-	if _, err := schema.Bootstrap(st, s); err != nil {
+	if _, err := schema.Bootstrap(st, sch); err != nil {
 		st.Close()
 		return nil, nil, err
 	}
@@ -292,7 +292,7 @@ func openAPI(paths []string) (*store.Store, *crud.API, error) {
 	}
 	api := crud.New(st, lg)
 	api.UserID = crud.DefaultUserID()
-	bs, err := schema.Builtins()
+	builtins, err := schema.Builtins()
 	if err != nil {
 		st.Close()
 		return nil, nil, err
@@ -305,14 +305,14 @@ func openAPI(paths []string) (*store.Store, *crud.API, error) {
 		st.Close()
 		return nil, nil, err
 	}
-	api.EnableEncryption(cipher, pref, s)
-	api.EnableFeatures(s, bs)
-	tw, err := script.Attach(api, paths[0], paths[2], s, bs)
+	api.EnableEncryption(cipher, pref, sch)
+	api.EnableFeatures(sch, builtins)
+	attachWarns, err := script.Attach(api, paths[0], paths[2], sch, builtins)
 	if err != nil {
 		st.Close()
 		return nil, nil, err
 	}
-	for _, w := range tw {
+	for _, w := range attachWarns {
 		fmt.Fprintln(os.Stderr, "warning:", w)
 	}
 	return st, api, nil
@@ -322,10 +322,10 @@ func openAPI(paths []string) (*store.Store, *crud.API, error) {
 // empty string; SQL NULL has its own verb, so no value is magic here.
 func parseAssigns(args []string) (map[string]string, error) {
 	fields := make(map[string]string, len(args))
-	for _, a := range args {
-		k, v, ok := strings.Cut(a, "=")
+	for _, arg := range args {
+		k, v, ok := strings.Cut(arg, "=")
 		if !ok || k == "" {
-			return nil, fmt.Errorf("expected field=value, got %q", a)
+			return nil, fmt.Errorf("expected field=value, got %q", arg)
 		}
 		fields[k] = v
 	}
@@ -336,7 +336,7 @@ func parseAssigns(args []string) (map[string]string, error) {
 // ago, via segment rotation (never editing a log file in place). The next
 // sync commits the rotation.
 func gcLog(ddlPath, logDir string) error {
-	s, err := ddl.ParseFile(ddlPath)
+	sch, err := ddl.ParseFile(ddlPath)
 	if err != nil {
 		return err
 	}
@@ -351,7 +351,7 @@ func gcLog(ddlPath, logDir string) error {
 	for _, w := range warns {
 		fmt.Println("warning:", w)
 	}
-	days := s.TunableInt("gc_age_days", 90)
+	days := sch.TunableInt("gc_age_days", 90)
 	keep, collected := txlog.GC(entries, txlog.CutoffDays(days))
 	if collected == 0 {
 		fmt.Printf("nothing to collect (threshold: deleted > %d days ago)\n", days)

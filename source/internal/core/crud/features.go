@@ -30,18 +30,18 @@ func (a *API) EnableFeatures(schemas ...*ddl.Schema) {
 	a.features = map[string]ddl.Features{}
 	a.access = map[string]ddl.Access{}
 	a.fieldAccess = map[string]map[string]ddl.Access{}
-	for _, s := range schemas {
-		for _, t := range s.Tables {
-			if _, ok := a.features[t.Name]; ok {
+	for _, schema := range schemas {
+		for _, table := range schema.Tables {
+			if _, ok := a.features[table.Name]; ok {
 				continue
 			}
-			a.features[t.Name] = t.Features
-			a.access[t.Name] = t.Access
-			fa := map[string]ddl.Access{}
-			for _, f := range t.Fields {
-				fa[f.Name] = f.Access
+			a.features[table.Name] = table.Features
+			a.access[table.Name] = table.Access
+			fieldAcc := map[string]ddl.Access{}
+			for _, field := range table.Fields {
+				fieldAcc[field.Name] = field.Access
 			}
-			a.fieldAccess[t.Name] = fa
+			a.fieldAccess[table.Name] = fieldAcc
 		}
 	}
 }
@@ -72,10 +72,10 @@ func (a *API) audit(table, id, action string, changed map[string]string) []txlog
 	case "update":
 		if old, ok, _ := a.Get(table, id); ok {
 			oldVals := map[string]string{}
-			for f, nv := range changed {
+			for field, newVal := range changed {
 				// design: only fields that HAD a value which changed or was cleared
-				if ov := old[f]; ov != "" && ov != nv {
-					oldVals[f] = ov
+				if oldVal := old[field]; oldVal != "" && oldVal != newVal {
+					oldVals[field] = oldVal
 				}
 			}
 			vals = encodeAuditValues(oldVals)
@@ -86,22 +86,22 @@ func (a *API) audit(table, id, action string, changed map[string]string) []txlog
 		if last := a.lastAudit(table, id); last != nil &&
 			last["action"] == "update" && last["user_id"] == a.UserID {
 			merged := mergeAuditValues(last["values"], vals)
-			es := []txlog.Entry{a.entry("audit_trail", last["id"], "date", "update", now)}
+			entries := []txlog.Entry{a.entry("audit_trail", last["id"], "date", "update", now)}
 			if merged != last["values"] {
-				es = append(es, a.entry("audit_trail", last["id"], "values", "update", merged))
+				entries = append(entries, a.entry("audit_trail", last["id"], "values", "update", merged))
 			}
-			return es
+			return entries
 		}
 	case "delete":
 		// the row is about to vanish from the view; snapshot what it held
 		if old, ok, _ := a.Get(table, id); ok {
 			snap := map[string]string{}
-			for f, v := range old {
-				switch f {
+			for field, value := range old {
+				switch field {
 				case "id", "is_active", "is_deleted", "date_created":
 				default:
-					if v != "" {
-						snap[f] = v
+					if value != "" {
+						snap[field] = value
 					}
 				}
 			}
@@ -109,7 +109,7 @@ func (a *API) audit(table, id, action string, changed map[string]string) []txlog
 		}
 	}
 	audID := newID()
-	es := []txlog.Entry{
+	entries := []txlog.Entry{
 		a.entry("audit_trail", audID, "", "create", ""),
 		a.entry("audit_trail", audID, "table_name", "update", table),
 		a.entry("audit_trail", audID, "parent_id", "update", id),
@@ -118,9 +118,9 @@ func (a *API) audit(table, id, action string, changed map[string]string) []txlog
 		a.entry("audit_trail", audID, "action", "update", action),
 	}
 	if vals != "" {
-		es = append(es, a.entry("audit_trail", audID, "values", "update", vals))
+		entries = append(entries, a.entry("audit_trail", audID, "values", "update", vals))
 	}
-	return es
+	return entries
 }
 
 // lastAudit fetches the newest audit record for a row; nil when none/unreadable.
@@ -135,33 +135,33 @@ func (a *API) lastAudit(table, id string) map[string]string {
 
 // encodeAuditValues renders the design's values format: field:"old value"
 // pairs, space-separated, sorted, with any double quote doubled (CSV-style).
-func encodeAuditValues(m map[string]string) string {
-	parts := make([]string, 0, len(m))
-	for _, f := range sortedKeys(m) {
-		parts = append(parts, f+`:"`+strings.ReplaceAll(m[f], `"`, `""`)+`"`)
+func encodeAuditValues(values map[string]string) string {
+	parts := make([]string, 0, len(values))
+	for _, field := range sortedKeys(values) {
+		parts = append(parts, field+`:"`+strings.ReplaceAll(values[field], `"`, `""`)+`"`)
 	}
 	return strings.Join(parts, " ")
 }
 
 // parseAuditValues is the inverse; unparseable tails are dropped, not fatal.
-func parseAuditValues(s string) map[string]string {
+func parseAuditValues(encoded string) map[string]string {
 	out := map[string]string{}
-	for i := 0; i < len(s); {
-		colon := strings.Index(s[i:], `:"`)
+	for i := 0; i < len(encoded); {
+		colon := strings.Index(encoded[i:], `:"`)
 		if colon < 0 {
 			break
 		}
-		field := s[i : i+colon]
+		field := encoded[i : i+colon]
 		i += colon + 2
 		var val strings.Builder
 		for {
-			q := strings.IndexByte(s[i:], '"')
-			if q < 0 {
+			quote := strings.IndexByte(encoded[i:], '"')
+			if quote < 0 {
 				return out // torn value: keep what parsed so far
 			}
-			val.WriteString(s[i : i+q])
-			i += q + 1
-			if i < len(s) && s[i] == '"' { // doubled quote = literal
+			val.WriteString(encoded[i : i+quote])
+			i += quote + 1
+			if i < len(encoded) && encoded[i] == '"' { // doubled quote = literal
 				val.WriteByte('"')
 				i++
 				continue
@@ -169,7 +169,7 @@ func parseAuditValues(s string) map[string]string {
 			break
 		}
 		out[strings.TrimSpace(field)] = val.String()
-		for i < len(s) && s[i] == ' ' {
+		for i < len(encoded) && encoded[i] == ' ' {
 			i++
 		}
 	}
@@ -179,13 +179,13 @@ func parseAuditValues(s string) map[string]string {
 // mergeAuditValues folds new old-values into an existing record, keeping the
 // already-recorded (older) value when a field appears in both.
 func mergeAuditValues(have, add string) string {
-	h, n := parseAuditValues(have), parseAuditValues(add)
-	for f, v := range n {
-		if _, ok := h[f]; !ok {
-			h[f] = v
+	haveVals, addVals := parseAuditValues(have), parseAuditValues(add)
+	for field, value := range addVals {
+		if _, ok := haveVals[field]; !ok {
+			haveVals[field] = value
 		}
 	}
-	return encodeAuditValues(h)
+	return encodeAuditValues(haveVals)
 }
 
 // --- m:m links ---
@@ -217,8 +217,8 @@ func (a *API) Links(table1, id1, table2 string) ([]string, error) {
 		return nil, err
 	}
 	ids := make([]string, len(rows))
-	for i, r := range rows {
-		ids[i] = r["parent_id_2"]
+	for i, row := range rows {
+		ids[i] = row["parent_id_2"]
 	}
 	return ids, nil
 }

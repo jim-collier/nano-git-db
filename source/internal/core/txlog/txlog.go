@@ -174,8 +174,8 @@ func (l *Log) Append(entries ...Entry) error {
 			return err
 		}
 	}
-	for _, e := range entries {
-		if err := w.Write(e.record()); err != nil {
+	for _, entry := range entries {
+		if err := w.Write(entry.record()); err != nil {
 			return err
 		}
 	}
@@ -184,12 +184,12 @@ func (l *Log) Append(entries ...Entry) error {
 		return err
 	}
 
-	f, err := os.OpenFile(l.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	file, err := os.OpenFile(l.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	_, err = f.Write(buf.Bytes())
+	defer file.Close()
+	_, err = file.Write(buf.Bytes())
 	return err
 }
 
@@ -199,13 +199,13 @@ func (l *Log) Append(entries ...Entry) error {
 func (l *Log) ReadAll() ([]Entry, []string, error) {
 	var out []Entry
 	var warns []string
-	for _, p := range l.files() {
-		e, w, err := readLogFile(p)
-		warns = append(warns, w...)
+	for _, path := range l.files() {
+		fileEntries, fileWarnings, err := readLogFile(path)
+		warns = append(warns, fileWarnings...)
 		if err != nil {
 			return out, warns, err
 		}
-		out = append(out, e...)
+		out = append(out, fileEntries...)
 	}
 	return out, warns, nil
 }
@@ -216,16 +216,16 @@ func (l *Log) ReadAll() ([]Entry, []string, error) {
 // a warning; repeated header rows (a union merge can leave extras) skip
 // silently; only I/O errors abort.
 func readLogFile(path string) ([]Entry, []string, error) {
-	f, err := os.Open(path)
+	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil, nil
 	}
 	if err != nil {
 		return nil, nil, err
 	}
-	defer f.Close()
+	defer file.Close()
 
-	r := csv.NewReader(f)
+	r := csv.NewReader(file)
 	r.FieldsPerRecord = -1
 	r.LazyQuotes = true
 
@@ -288,7 +288,7 @@ func (e Entry) record() []string {
 // field is read by name rather than a fixed position.
 func entryFrom(rec []string, cols map[string]int) Entry {
 	gc, _ := strconv.ParseBool(field(rec, cols, "ok_to_garbage_collect"))
-	e := Entry{
+	entry := Entry{
 		TxID:     field(rec, cols, "tx_id"),
 		Date:     field(rec, cols, "date"),
 		Table:    decodeSym(field(rec, cols, "table_name")),
@@ -304,14 +304,14 @@ func entryFrom(rec []string, cols map[string]int) Entry {
 	val := field(rec, cols, "new_value")
 	switch {
 	case val == nullMarker:
-		e.IsNull = true
+		entry.IsNull = true
 	case strings.HasPrefix(val, encMarker):
-		e.Enc = true
-		e.NewValue = val[len(encMarker):] // opaque token; crypt opens it later
+		entry.Enc = true
+		entry.NewValue = val[len(encMarker):] // opaque token; crypt opens it later
 	default:
-		e.NewValue = decodeSym(val)
+		entry.NewValue = decodeSym(val)
 	}
-	return e
+	return entry
 }
 
 // Apply replays entries into the store's SQLite view, in one transaction. The
@@ -347,9 +347,9 @@ func Apply(st *store.Store, entries []Entry) ([]string, error) {
 
 	var warns []string
 	dead := map[string]bool{} // (table, row) pairs hard-deleted so far
-	for _, e := range ordered {
-		key := e.Table + "\x00" + e.RowID
-		switch e.Op {
+	for _, entry := range ordered {
+		key := entry.Table + "\x00" + entry.RowID
+		switch entry.Op {
 		case "create":
 			delete(dead, key)
 		case "delete":
@@ -359,12 +359,12 @@ func Apply(st *store.Store, entries []Entry) ([]string, error) {
 				continue
 			}
 		}
-		if err := applyOne(tx, e); err != nil {
+		if err := applyOne(tx, entry); err != nil {
 			if skippable(err) {
-				warns = append(warns, fmt.Sprintf("tx %s (%s/%s) skipped: %v", e.TxID, e.Table, e.Op, err))
+				warns = append(warns, fmt.Sprintf("tx %s (%s/%s) skipped: %v", entry.TxID, entry.Table, entry.Op, err))
 				continue
 			}
-			return warns, fmt.Errorf("tx %s (%s/%s): %w", e.TxID, e.Table, e.Op, err)
+			return warns, fmt.Errorf("tx %s (%s/%s): %w", entry.TxID, entry.Table, entry.Op, err)
 		}
 	}
 	return warns, tx.Commit()
@@ -392,20 +392,20 @@ func skippable(err error) bool {
 		strings.Contains(msg, "UNIQUE constraint failed")
 }
 
-func applyOne(tx *sql.Tx, e Entry) error {
-	id, err := hex.DecodeString(e.RowID)
+func applyOne(tx *sql.Tx, entry Entry) error {
+	id, err := hex.DecodeString(entry.RowID)
 	if err != nil {
-		return fmt.Errorf("%w: bad row_id %q: %v", errBadEntry, e.RowID, err)
+		return fmt.Errorf("%w: bad row_id %q: %v", errBadEntry, entry.RowID, err)
 	}
-	tbl := quoteIdent(e.Table)
+	tbl := quoteIdent(entry.Table)
 
-	switch e.Op {
+	switch entry.Op {
 	case "create":
 		if _, err := tx.Exec(`INSERT OR IGNORE INTO `+tbl+` ("id") VALUES (?)`, id); err != nil {
 			return err
 		}
-		if e.Field != "" {
-			return setField(tx, tbl, e, id)
+		if entry.Field != "" {
+			return setField(tx, tbl, entry, id)
 		}
 		return nil
 	case "update":
@@ -413,7 +413,7 @@ func applyOne(tx *sql.Tx, e Entry) error {
 		if _, err := tx.Exec(`INSERT OR IGNORE INTO `+tbl+` ("id") VALUES (?)`, id); err != nil {
 			return err
 		}
-		return setField(tx, tbl, e, id)
+		return setField(tx, tbl, entry, id)
 	case "mark_delete":
 		_, err := tx.Exec(`UPDATE `+tbl+` SET "is_deleted"=1 WHERE "id"=?`, id)
 		return err
@@ -421,7 +421,7 @@ func applyOne(tx *sql.Tx, e Entry) error {
 		_, err := tx.Exec(`DELETE FROM `+tbl+` WHERE "id"=?`, id)
 		return err
 	default:
-		return fmt.Errorf("%w: unknown operation %q", errBadEntry, e.Op)
+		return fmt.Errorf("%w: unknown operation %q", errBadEntry, entry.Op)
 	}
 }
 
@@ -429,12 +429,12 @@ func applyOne(tx *sql.Tx, e Entry) error {
 // affinity), or as NULL when the entry carries the 🗦NULL🗧 sentinel. A still-
 // encrypted entry (Enc: the decrypt pass had no key) also binds NULL - the view
 // must never hold ciphertext.
-func setField(tx *sql.Tx, quotedTable string, e Entry, id []byte) error {
-	var val any = e.NewValue
-	if e.IsNull || e.Enc {
+func setField(tx *sql.Tx, quotedTable string, entry Entry, id []byte) error {
+	var val any = entry.NewValue
+	if entry.IsNull || entry.Enc {
 		val = nil
 	}
-	_, err := tx.Exec(`UPDATE `+quotedTable+` SET `+quoteIdent(e.Field)+`=? WHERE "id"=?`, val, id)
+	_, err := tx.Exec(`UPDATE `+quotedTable+` SET `+quoteIdent(entry.Field)+`=? WHERE "id"=?`, val, id)
 	return err
 }
 

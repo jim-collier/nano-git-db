@@ -31,15 +31,15 @@ func Script(args []string) error {
 		return err
 	}
 	defer c.Close()
-	bs, err := schema.Builtins()
+	builtins, err := schema.Builtins()
 	if err != nil {
 		return err
 	}
-	tw, err := script.Attach(c.API, args[1], args[3], c.Schema, bs)
+	attachWarns, err := script.Attach(c.API, args[1], args[3], c.Schema, builtins)
 	if err != nil {
 		return err
 	}
-	for _, w := range append(c.Warnings, tw...) {
+	for _, w := range append(c.Warnings, attachWarns...) {
 		fmt.Fprintln(os.Stderr, "warning:", w)
 	}
 	return script.RunFile(c.API, args[0])

@@ -147,22 +147,22 @@ func Builtins() (*ddl.Schema, error) {
 
 // featureTables marks the feature tables one table's features: block pulls in.
 // Attachments and row access ride on m:m links, so they drag many2many along.
-func featureTables(f ddl.Features, need map[string]bool) {
-	if f.Comments {
+func featureTables(features ddl.Features, need map[string]bool) {
+	if features.Comments {
 		need["comments"] = true
 	}
-	if f.AuditTrail {
+	if features.AuditTrail {
 		need["audit_trail"] = true
 	}
-	if f.LocalAttachments {
+	if features.LocalAttachments {
 		need["attachments_copy"] = true
 		need["many2many"] = true
 	}
-	if f.URIAttachments {
+	if features.URIAttachments {
 		need["attachments_uri"] = true
 		need["many2many"] = true
 	}
-	if f.RowLevelAccess {
+	if features.RowLevelAccess {
 		need["access_rows"] = true
 		need["many2many"] = true
 	}
@@ -174,42 +174,42 @@ func featureTables(f ddl.Features, need map[string]bool) {
 // only appears when a table asks for row_level_access). Idempotent - safe to
 // run every startup. user may be nil. Returned warnings are non-fatal.
 func Bootstrap(st *store.Store, user *ddl.Schema) ([]string, error) {
-	bs, err := Builtins()
+	builtins, err := Builtins()
 	if err != nil {
 		return nil, err
 	}
 	need := map[string]bool{}
-	for _, n := range alwaysOn {
-		need[n] = true
+	for _, name := range alwaysOn {
+		need[name] = true
 	}
-	for _, t := range bs.Tables {
-		if t.Name == "users" || t.Name == "groups" {
-			featureTables(t.Features, need)
+	for _, table := range builtins.Tables {
+		if table.Name == "users" || table.Name == "groups" {
+			featureTables(table.Features, need)
 		}
 	}
 	userNames := map[string]bool{}
 	if user != nil {
-		for _, t := range user.Tables {
-			userNames[t.Name] = true
-			featureTables(t.Features, need)
+		for _, table := range user.Tables {
+			userNames[table.Name] = true
+			featureTables(table.Features, need)
 		}
 	}
 	var warns []string
-	sub := &ddl.Schema{}
-	for _, t := range bs.Tables {
-		if !need[t.Name] {
+	toBuild := &ddl.Schema{}
+	for _, table := range builtins.Tables {
+		if !need[table.Name] {
 			continue
 		}
-		if userNames[t.Name] {
+		if userNames[table.Name] {
 			// The user schema already built its own shape; additively merging
 			// two definitions of one table would leave neither intact.
 			warns = append(warns, fmt.Sprintf(
-				"table %q is a built-in name; keeping the user DDL definition, skipping the built-in one", t.Name))
+				"table %q is a built-in name; keeping the user DDL definition, skipping the built-in one", table.Name))
 			continue
 		}
-		sub.Tables = append(sub.Tables, t)
+		toBuild.Tables = append(toBuild.Tables, table)
 	}
-	return warns, st.Build(sub)
+	return warns, st.Build(toBuild)
 }
 
 // defaultGroups are the rows populated on db creation, per the design.
@@ -227,8 +227,8 @@ var defaultGroups = []struct{ Name, Desc string }{
 // both creates and the partial unique on name skips the loser.
 // First-user membership in owners/admins is deferred until users exist.
 func SeedDefaults(api *crud.API) error {
-	for _, g := range defaultGroups {
-		rows, err := api.Query(`SELECT "id" FROM "groups" WHERE "name"=? AND "is_deleted"=0`, g.Name)
+	for _, group := range defaultGroups {
+		rows, err := api.Query(`SELECT "id" FROM "groups" WHERE "name"=? AND "is_deleted"=0`, group.Name)
 		if err != nil {
 			return err
 		}
@@ -236,8 +236,8 @@ func SeedDefaults(api *crud.API) error {
 			continue
 		}
 		if _, err := api.Create("groups", map[string]string{
-			"name":        g.Name,
-			"description": g.Desc,
+			"name":        group.Name,
+			"description": group.Desc,
 		}); err != nil {
 			return err
 		}

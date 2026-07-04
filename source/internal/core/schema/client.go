@@ -48,16 +48,16 @@ func OpenClient(ddlPath, dbPath, logDir, userID string) (*Client, error) {
 // bootstraps the built-in tables, loads the encryption key (if any), replays
 // the tx-log (decrypting field values along the way), then seeds the default
 // groups (after the replay, so an already-seeded log is a no-op).
-func OpenClientWith(o OpenOpts) (*Client, error) {
-	sch, err := ddl.ParseFile(o.DDLPath)
+func OpenClientWith(opts OpenOpts) (*Client, error) {
+	sch, err := ddl.ParseFile(opts.DDLPath)
 	if err != nil {
 		return nil, err
 	}
-	queries, qw, err := ddl.ParseQueriesFile(ddl.QueriesPath(o.DDLPath))
+	queries, queryWarns, err := ddl.ParseQueriesFile(ddl.QueriesPath(opts.DDLPath))
 	if err != nil {
 		return nil, err
 	}
-	st, err := store.Open(o.DBPath)
+	st, err := store.Open(opts.DBPath)
 	if err != nil {
 		return nil, err
 	}
@@ -68,55 +68,55 @@ func OpenClientWith(o OpenOpts) (*Client, error) {
 	if err := st.Build(sch); err != nil {
 		return fail(err)
 	}
-	bw, err := Bootstrap(st, sch)
+	bootstrapWarns, err := Bootstrap(st, sch)
 	if err != nil {
 		return fail(err)
 	}
-	lg, err := txlog.Open(o.LogDir)
+	logFile, err := txlog.Open(opts.LogDir)
 	if err != nil {
 		return fail(err)
 	}
-	bs, err := Builtins()
+	builtins, err := Builtins()
 	if err != nil {
 		return fail(err)
 	}
-	cipher, hasKey, err := enc.LoadCipher(o.KeyFile) // a corrupt key file is fatal
+	cipher, hasKey, err := enc.LoadCipher(opts.KeyFile) // a corrupt key file is fatal
 	if err != nil {
 		return fail(err)
 	}
-	entries, rw, err := lg.ReadAll()
+	entries, readWarns, err := logFile.ReadAll()
 	if err != nil {
 		return fail(err)
 	}
-	ApplyAliases(entries, sch, bs)                     // pre-rename entries -> current names
+	ApplyAliases(entries, sch, builtins)               // pre-rename entries -> current names
 	unreadable := crud.DecryptEntries(entries, cipher) // before Apply: view holds cleartext
-	aw, err := txlog.Apply(st, entries)
+	applyWarns, err := txlog.Apply(st, entries)
 	if err != nil {
 		return fail(err)
 	}
-	aw = append(rw, aw...)
-	if o.UserID == "" {
-		o.UserID = crud.DefaultUserID()
+	applyWarns = append(readWarns, applyWarns...)
+	if opts.UserID == "" {
+		opts.UserID = crud.DefaultUserID()
 	}
-	pref := o.EncryptPref
+	pref := opts.EncryptPref
 	if pref == "" {
 		pref = "auto"
 	}
-	api := crud.New(st, lg)
-	api.UserID = o.UserID
+	api := crud.New(st, logFile)
+	api.UserID = opts.UserID
 	api.EnableEncryption(cipher, pref, sch)
-	api.EnableFeatures(sch, bs) // before seeding, so the seeded groups get audited
+	api.EnableFeatures(sch, builtins) // before seeding, so the seeded groups get audited
 	if err := SeedDefaults(api); err != nil {
 		return fail(err)
 	}
-	aw = append(aw, encryptionWarnings(sch, hasKey, pref, unreadable)...)
+	applyWarns = append(applyWarns, encryptionWarnings(sch, hasKey, pref, unreadable)...)
 	return &Client{
 		Schema:   sch,
 		Store:    st,
 		API:      api,
 		Queries:  queries,
-		Warnings: append(append(append(sch.Warnings, qw...), bw...), aw...),
-		log:      lg,
+		Warnings: append(append(append(sch.Warnings, queryWarns...), bootstrapWarns...), applyWarns...),
+		log:      logFile,
 	}, nil
 }
 
@@ -125,21 +125,21 @@ func OpenClientWith(o OpenOpts) (*Client, error) {
 // with no key (writes to those fields will be refused), and the "you have the
 // key but turned encryption off" case.
 func encryptionWarnings(sch *ddl.Schema, hasKey bool, pref string, unreadable int) []string {
-	var w []string
+	var warns []string
 	if unreadable > 0 {
 		if hasKey {
-			w = append(w, fmt.Sprintf("%d encrypted value(s) failed to decrypt (wrong key or tampering); shown empty", unreadable))
+			warns = append(warns, fmt.Sprintf("%d encrypted value(s) failed to decrypt (wrong key or tampering); shown empty", unreadable))
 		} else {
-			w = append(w, fmt.Sprintf("%d encrypted value(s) unreadable - no key file found; shown empty. Obtain the key to read them", unreadable))
+			warns = append(warns, fmt.Sprintf("%d encrypted value(s) unreadable - no key file found; shown empty. Obtain the key to read them", unreadable))
 		}
 	}
 	if !hasKey && sch.HasAlwaysEncryption() {
-		w = append(w, "this database has always-encrypted fields but no key file; those fields cannot be written until the key is provided")
+		warns = append(warns, "this database has always-encrypted fields but no key file; those fields cannot be written until the key is provided")
 	}
 	if hasKey && pref == "off" {
-		w = append(w, "encryption is available (key present) but disabled for you (--encrypt=off); new data is written in the clear")
+		warns = append(warns, "encryption is available (key present) but disabled for you (--encrypt=off); new data is written in the clear")
 	}
-	return w
+	return warns
 }
 
 // Close releases the client's store.
@@ -163,9 +163,9 @@ type Catalog struct {
 // Queries with no view are offered everywhere.
 func (c *Catalog) QueriesFor(view string) []ddl.NamedQuery {
 	var out []ddl.NamedQuery
-	for _, q := range c.Queries {
-		if q.Active && (q.View == "" || q.View == view) {
-			out = append(out, q)
+	for _, query := range c.Queries {
+		if query.Active && (query.View == "" || query.View == view) {
+			out = append(out, query)
 		}
 	}
 	return out
@@ -204,23 +204,23 @@ func NewCatalog(api *crud.API, schemas ...*ddl.Schema) (*Catalog, error) {
 	tableAccess := map[string]ddl.Access{}
 	fieldAccess := map[string]map[string]ddl.Access{}
 	for _, s := range schemas {
-		for _, t := range s.Tables {
-			if _, dup := c.Fields[t.Name]; dup {
+		for _, table := range s.Tables {
+			if _, dup := c.Fields[table.Name]; dup {
 				continue // earlier schema (the user's) wins
 			}
-			names := make([]string, len(t.Fields))
-			fa := map[string]ddl.Access{}
-			for i, f := range t.Fields {
-				names[i] = f.Name
-				fa[f.Name] = f.Access
+			names := make([]string, len(table.Fields))
+			fieldAcc := map[string]ddl.Access{}
+			for i, field := range table.Fields {
+				names[i] = field.Name
+				fieldAcc[field.Name] = field.Access
 			}
-			c.Fields[t.Name] = names
-			c.Features[t.Name] = t.Features
-			tableAccess[t.Name] = t.Access
-			fieldAccess[t.Name] = fa
-			if existing[t.Name] && !seen[t.Name] {
-				seen[t.Name] = true
-				c.Tables = append(c.Tables, t.Name)
+			c.Fields[table.Name] = names
+			c.Features[table.Name] = table.Features
+			tableAccess[table.Name] = table.Access
+			fieldAccess[table.Name] = fieldAcc
+			if existing[table.Name] && !seen[table.Name] {
+				seen[table.Name] = true
+				c.Tables = append(c.Tables, table.Name)
 			}
 		}
 	}
@@ -233,8 +233,8 @@ func NewCatalog(api *crud.API, schemas ...*ddl.Schema) (*Catalog, error) {
 	sort.Strings(rest)
 	c.Tables = append(c.Tables, rest...)
 
-	for _, t := range c.Tables {
-		cols, err := api.Query(`SELECT name FROM pragma_table_info(?)`, t)
+	for _, table := range c.Tables {
+		cols, err := api.Query(`SELECT name FROM pragma_table_info(?)`, table)
 		if err != nil {
 			return nil, err
 		}
@@ -242,14 +242,14 @@ func NewCatalog(api *crud.API, schemas ...*ddl.Schema) (*Catalog, error) {
 		for _, r := range cols {
 			switch r["name"] {
 			case "is_deleted":
-				c.HasDeleted[t] = true
+				c.HasDeleted[table] = true
 			case "id", "is_active", "date_created":
 			default:
 				plain = append(plain, r["name"])
 			}
 		}
-		if len(c.Fields[t]) == 0 { // view-only fallback: everything but system cols
-			c.Fields[t] = plain
+		if len(c.Fields[table]) == 0 { // view-only fallback: everything but system cols
+			c.Fields[table] = plain
 		}
 	}
 	c.resolveViews(schemas...) // after Fields: tree_grid parent_field checks need them
@@ -278,11 +278,11 @@ func (c *Catalog) ColumnsFor(table string) []string {
 // LiveRows loads a table's visible rows; soft-deleted ones are hidden when
 // the table has is_deleted, and row-level grants the user lacks hide theirs.
 func (c *Catalog) LiveRows(api *crud.API, table string) ([]map[string]string, error) {
-	q := `SELECT * FROM "` + strings.ReplaceAll(table, `"`, `""`) + `"`
+	query := `SELECT * FROM "` + strings.ReplaceAll(table, `"`, `""`) + `"`
 	if c.HasDeleted[table] {
-		q += ` WHERE "is_deleted"=0`
+		query += ` WHERE "is_deleted"=0`
 	}
-	rows, err := api.Query(q)
+	rows, err := api.Query(query)
 	if err != nil {
 		return nil, err
 	}

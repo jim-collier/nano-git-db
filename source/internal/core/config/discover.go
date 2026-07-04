@@ -43,47 +43,47 @@ func List() []Listed {
 // scanBase lists the immediate sub-directories of one base that hold a
 // config.toml. A missing base is not an error - it just yields nothing.
 func scanBase(base string, system bool) []Listed {
-	ents, err := os.ReadDir(base)
+	entries, err := os.ReadDir(base)
 	if err != nil {
 		return nil
 	}
 	var out []Listed
-	for _, e := range ents {
-		if !e.IsDir() {
+	for _, entry := range entries {
+		if !entry.IsDir() {
 			continue
 		}
-		dir := filepath.Join(base, e.Name())
+		dir := filepath.Join(base, entry.Name())
 		if _, err := os.Stat(filepath.Join(dir, recordFile)); err != nil {
 			continue // not a registered database
 		}
-		out = append(out, validate(dir, e.Name(), system))
+		out = append(out, validate(dir, entry.Name(), system))
 	}
 	return out
 }
 
 // validate loads and sanity-checks one record.
 func validate(dir, fallbackName string, system bool) Listed {
-	l := Listed{Name: fallbackName, Dir: dir, System: system}
+	listed := Listed{Name: fallbackName, Dir: dir, System: system}
 	cfg, err := Load(dir)
 	if err != nil {
-		l.Err = fmt.Errorf("unreadable config: %w", err)
-		return l
+		listed.Err = fmt.Errorf("unreadable config: %w", err)
+		return listed
 	}
-	l.Config = cfg
-	l.Name = cfg.Name
+	listed.Config = cfg
+	listed.Name = cfg.Name
 	if cfg.DDLPath == "" {
-		l.Err = fmt.Errorf("no ddl_path set")
-		return l
+		listed.Err = fmt.Errorf("no ddl_path set")
+		return listed
 	}
 	if _, err := os.Stat(cfg.DDLPath); err != nil {
-		l.Err = fmt.Errorf("DDL not found: %s", cfg.DDLPath)
-		return l
+		listed.Err = fmt.Errorf("DDL not found: %s", cfg.DDLPath)
+		return listed
 	}
 	if _, err := ddl.ParseFile(cfg.DDLPath); err != nil {
-		l.Err = fmt.Errorf("DDL invalid: %w", err)
-		return l
+		listed.Err = fmt.Errorf("DDL invalid: %w", err)
+		return listed
 	}
-	return l
+	return listed
 }
 
 // FindByDDL returns the registered record whose ddl_path matches ddlPath (by
@@ -92,9 +92,9 @@ func validate(dir, fallbackName string, system bool) Listed {
 // rather than guessing a key beside the DDL (which would sit in the git repo).
 func FindByDDL(ddlPath string) *DBConfig {
 	abs := absPath(ddlPath)
-	for _, l := range List() {
-		if l.Config != nil && absPath(l.Config.DDLPath) == abs {
-			return l.Config
+	for _, listed := range List() {
+		if listed.Config != nil && absPath(listed.Config.DDLPath) == abs {
+			return listed.Config
 		}
 	}
 	return nil

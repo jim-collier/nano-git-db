@@ -27,59 +27,59 @@ type blockVM struct {
 	Children []*blockVM
 }
 
-func (s *server) blockVM(view string, b *schema.ViewBlock, idx *int) *blockVM {
-	vm := &blockVM{View: view}
-	if len(b.Children) > 0 {
+func (s *server) blockVM(view string, block *schema.ViewBlock, idx *int) *blockVM {
+	node := &blockVM{View: view}
+	if len(block.Children) > 0 {
 		dir := "column"
-		if b.Dir == "col" {
+		if block.Dir == "col" {
 			dir = "row"
 		}
-		vm.DirStyle = template.CSS("display:flex;flex-direction:" + dir + ";gap:6px;min-height:0;")
-		props := b.Proportions()
-		for i, ch := range b.Children {
-			c := s.blockVM(view, ch, idx)
-			c.Style = template.CSS(fmt.Sprintf("flex:%d 1 0;min-height:0;overflow:auto;", props[i]))
-			vm.Children = append(vm.Children, c)
+		node.DirStyle = template.CSS("display:flex;flex-direction:" + dir + ";gap:6px;min-height:0;")
+		props := block.Proportions()
+		for i, child := range block.Children {
+			childVM := s.blockVM(view, child, idx)
+			childVM.Style = template.CSS(fmt.Sprintf("flex:%d 1 0;min-height:0;overflow:auto;", props[i]))
+			node.Children = append(node.Children, childVM)
 		}
-		return vm
+		return node
 	}
-	vm.Leaf = true
-	vm.Index = *idx
+	node.Leaf = true
+	node.Index = *idx
 	*idx++
-	ro := ""
-	if b.Readonly {
-		ro = ", ro"
+	roSuffix := ""
+	if block.Readonly {
+		roSuffix = ", ro"
 	}
-	vm.Title = fmt.Sprintf("%s: %s (%s%s)", b.Name, b.Table, b.Type, ro)
-	return vm
+	node.Title = fmt.Sprintf("%s: %s (%s%s)", block.Name, block.Table, block.Type, roSuffix)
+	return node
 }
 
 // view pulls and validates the view path segment; nil means already handled.
 func (s *server) view(w http.ResponseWriter, r *http.Request) *schema.ViewSpec {
-	v := s.cat.View(r.PathValue("view"))
-	if v == nil {
+	spec := s.cat.View(r.PathValue("view"))
+	if spec == nil {
 		http.Error(w, "no such view", http.StatusNotFound)
 	}
-	return v
+	return spec
 }
 
 func (s *server) viewPage(w http.ResponseWriter, r *http.Request) {
-	v := s.view(w, r)
-	if v == nil {
+	spec := s.view(w, r)
+	if spec == nil {
 		return
 	}
 	idx := 0
-	root := s.blockVM(v.Name, v.Root, &idx)
+	root := s.blockVM(spec.Name, spec.Root, &idx)
 	root.Style = "height:85vh;" // anchor the flex tree; children split this
 	data := map[string]any{
-		"Name": v.Name, "Root": root,
-		"Queries": s.cat.QueriesFor(v.Name),
+		"Name": spec.Name, "Root": root,
+		"Queries": s.cat.QueriesFor(spec.Name),
 	}
 	// startup_named_query: an hx-trigger=load div fetches its dataset into the
 	// first block as soon as the view renders. Unresolvable names degrade to
 	// the normal empty open.
-	if v.StartupNamedQuery != "" && s.cat.NamedQuery(v.StartupNamedQuery) != nil {
-		data["StartupQuery"] = v.StartupNamedQuery
+	if spec.StartupNamedQuery != "" && s.cat.NamedQuery(spec.StartupNamedQuery) != nil {
+		data["StartupQuery"] = spec.StartupNamedQuery
 	}
 	s.render(w, "view.html", data)
 }
@@ -90,40 +90,40 @@ func (s *server) viewQuery(w http.ResponseWriter, r *http.Request) {
 	if s.view(w, r) == nil {
 		return
 	}
-	q := s.cat.NamedQuery(r.URL.Query().Get("name"))
-	if q == nil {
+	query := s.cat.NamedQuery(r.URL.Query().Get("name"))
+	if query == nil {
 		http.Error(w, "no such query", http.StatusNotFound)
 		return
 	}
-	cols, rows, err := s.api.QueryRows(q.SQL)
+	cols, rows, err := s.api.QueryRows(query.SQL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.render(w, "qrows.html", map[string]any{"Name": q.Name, "Cols": cols, "Rows": rows})
+	s.render(w, "qrows.html", map[string]any{"Name": query.Name, "Cols": cols, "Rows": rows})
 }
 
 // viewBlockRows loads one leaf block's dataset. Grid and tree_grid share the
 // template: a grid is just a tree where everything is a root.
 func (s *server) viewBlockRows(w http.ResponseWriter, r *http.Request) {
-	v := s.view(w, r)
-	if v == nil {
+	spec := s.view(w, r)
+	if spec == nil {
 		return
 	}
 	i, err := strconv.Atoi(r.PathValue("i"))
-	if err != nil || i < 0 || i >= len(v.Leaves) {
+	if err != nil || i < 0 || i >= len(spec.Leaves) {
 		http.Error(w, "no such block", http.StatusNotFound)
 		return
 	}
-	b := v.Leaves[i]
+	block := spec.Leaves[i]
 	data := map[string]any{
-		"Type": b.Type, "Table": b.Table, "Readonly": b.Readonly,
-		"Cols": s.cat.ColumnsFor(b.Table),
+		"Type": block.Type, "Table": block.Table, "Readonly": block.Readonly,
+		"Cols": s.cat.ColumnsFor(block.Table),
 	}
-	switch b.Type {
+	switch block.Type {
 	case "form":
 		// One-record panel; block linking is future work, show the first row.
-		rows, err := s.cat.LiveRows(s.api, b.Table)
+		rows, err := s.cat.LiveRows(s.api, block.Table)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -134,19 +134,19 @@ func (s *server) viewBlockRows(w http.ResponseWriter, r *http.Request) {
 		}
 		type fv struct{ F, V string }
 		var pairs []fv
-		for _, f := range s.cat.Fields[b.Table] {
+		for _, f := range s.cat.Fields[block.Table] {
 			pairs = append(pairs, fv{f, row[f]})
 		}
 		data["FieldVals"] = pairs
 	case "tree_grid":
-		tree, err := s.cat.TreeRows(s.api, b.Table, b.ParentField)
+		tree, err := s.cat.TreeRows(s.api, block.Table, block.ParentField)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		data["Rows"] = tree
 	default: // grid
-		rows, err := s.cat.LiveRows(s.api, b.Table)
+		rows, err := s.cat.LiveRows(s.api, block.Table)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

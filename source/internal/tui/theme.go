@@ -24,7 +24,7 @@ type theme struct {
 	selBg, selFg tcell.Color // list/grid selection; tview.Theme has no slot for it
 }
 
-func hx(v int32) tcell.Color { return tcell.NewHexColor(v) }
+func hx(hex int32) tcell.Color { return tcell.NewHexColor(hex) }
 
 // mk builds a theme from a small, readable set of colours; the rest of
 // tview.Theme is derived so callers only pick the ones that matter here.
@@ -80,18 +80,18 @@ func applyTheme(i int) { tview.Styles = themes[i].styles }
 // captures Styles at construction, and these three outlive a theme switch, so
 // they need repainting directly (and selection has no Styles slot).
 func (a *App) styleWidgets() {
-	t := themes[a.themeIdx]
-	s := t.styles
-	a.list.SetMainTextColor(s.PrimaryTextColor).
-		SetSelectedBackgroundColor(t.selBg).
-		SetSelectedTextColor(t.selFg)
-	a.list.SetBackgroundColor(s.PrimitiveBackgroundColor)
-	a.list.SetBorderColor(s.BorderColor).SetTitleColor(s.TitleColor)
-	a.grid.SetBackgroundColor(s.PrimitiveBackgroundColor)
-	a.grid.SetBorderColor(s.BorderColor).SetTitleColor(s.TitleColor)
-	a.grid.SetSelectedStyle(tcell.StyleDefault.Background(t.selBg).Foreground(t.selFg))
-	a.status.SetBackgroundColor(s.PrimitiveBackgroundColor)
-	a.status.SetTextColor(s.SecondaryTextColor)
+	thm := themes[a.themeIdx]
+	styles := thm.styles
+	a.list.SetMainTextColor(styles.PrimaryTextColor).
+		SetSelectedBackgroundColor(thm.selBg).
+		SetSelectedTextColor(thm.selFg)
+	a.list.SetBackgroundColor(styles.PrimitiveBackgroundColor)
+	a.list.SetBorderColor(styles.BorderColor).SetTitleColor(styles.TitleColor)
+	a.grid.SetBackgroundColor(styles.PrimitiveBackgroundColor)
+	a.grid.SetBorderColor(styles.BorderColor).SetTitleColor(styles.TitleColor)
+	a.grid.SetSelectedStyle(tcell.StyleDefault.Background(thm.selBg).Foreground(thm.selFg))
+	a.status.SetBackgroundColor(styles.PrimitiveBackgroundColor)
+	a.status.SetTextColor(styles.SecondaryTextColor)
 }
 
 // setTheme applies theme i live: swap the global styles, persist the choice,
@@ -103,9 +103,9 @@ func (a *App) setTheme(i int) {
 	}
 	a.themeIdx = i
 	applyTheme(i)
-	s := config.LoadSettings()
-	s.Theme = themes[i].name
-	_ = s.Save() // best-effort; a failed save must not break the running UI
+	settings := config.LoadSettings()
+	settings.Theme = themes[i].name
+	_ = settings.Save() // best-effort; a failed save must not break the running UI
 
 	reopen, tbl := a.curView, a.cur
 	a.buildUI()

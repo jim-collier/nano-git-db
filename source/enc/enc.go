@@ -28,8 +28,8 @@ type Ctx struct{ TxID, Table, Field, RowID string }
 // the returned token is line-safe text the core stores behind the tx-log's ENC
 // marker.
 type Cipher interface {
-	Seal(x Ctx, plaintext string) (token string, err error)
-	Open(x Ctx, token string) (plaintext string, err error)
+	Seal(ctx Ctx, plaintext string) (token string, err error)
+	Open(ctx Ctx, token string) (plaintext string, err error)
 }
 
 // Provider is the enterprise encryption backend: it loads key files into Ciphers
