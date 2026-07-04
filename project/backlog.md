@@ -48,7 +48,7 @@ In each section, items are listed approximately from newest to oldest.
 	- Our owned side used to (possibly) generate license keys, process payment, check subscription status, etc. This would basically be a completely separate company precense, ecommerce, and validation system.
 		- Basic requirements:
 			- 🔘 Minimal web dependencies. (To minimize contant cascading updates pulling in potentially hundreds of unknown/untrusted dependencies, near-constant churn with breaking and deprecating third-party updates; and also the growing threat of "supply-chain attack" risk.)
-	- Research drafted in [research-enterprise-concerns.md](research-enterprise-concerns.md): names the five concerns, proposes drawing the boundary by the signing-key asset (never in a customer artifact), recommends a separate vendor repo, and covers the minimal-web-deps requirement. Awaiting owner decisions listed at the end of that doc.
+	- Research drafted in the enterprise repo (`research-enterprise-concerns.md`), awaiting owner decisions listed there.
 
 ### Bugs
 
@@ -66,7 +66,7 @@ In each section, items are listed approximately from newest to oldest.
 	- Done: in the startup picker, `d` (or Delete) on a database asks to remove it, then - only if it has files on disk - a second confirm offers to delete those too (default keep). Remove just deregisters (drops the registry record); delete also removes the tx-log dir and record dir. The `.ddl` schema is always kept. Broken `[!]` records are removable; read-only system records are not.
 
 - 🛠️ Enterprise license validation scheme. Commonly used, phones home to verify active, allows N copies simultaneously. But doesn't fail if can't phone home for some time. Doesn't bind to specific hardware or anything.
-	- Scheme drafted in [research-license-validation.md](research-license-validation.md): signed offline-verifiable token (Ed25519, stdlib) whose validity window IS the grace period; periodic phone-home refreshes it; random per-install instance id for soft seat counting (no hardware binding); lapse degrades to read-only, never data loss. Enterprise-only. Awaiting owner decisions listed at the end of that doc.
+	- Scheme drafted in the enterprise repo (`research-license-validation.md`), awaiting owner decisions listed there.
 
 - ✅ Exe name should be 'ngdb'.
 	- Done: the built binary and all user-facing references (CLI/TUI/web usage, version line, web title) are now `ngdb`; `cmd/nanogitdb` renamed to `cmd/ngdb`. The module path `nano-git-db` and the `NANOGITDB_USER`/`NANOGITDB_HOST` env vars are unchanged.
