@@ -28,7 +28,7 @@ func Run(args []string) error {
 	// --version: print the build version and stop. A concise line the CI/CD
 	// pipeline can run to confirm the binary executes, without opening the TUI.
 	if len(args) > 0 && (args[0] == "--version" || args[0] == "-v") {
-		fmt.Println("nanogitdb " + Version)
+		fmt.Println("ngdb " + Version)
 		return nil
 	}
 	// --config[=path]: a global prefix that redirects the database registry;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright © 2026 Jim Collier
 
-// nanogitdb: one binary, four front-ends over a shared core.
+// ngdb: one binary, four front-ends over a shared core.
 // The first arg picks the front-end; default is the CLI.
 package main
 

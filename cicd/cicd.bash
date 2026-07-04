@@ -32,7 +32,7 @@ if [[ -z "${doQuietly+x}" ]]; then
 
 	## Settings (relative paths defined here will be verified and resolved later)
 	declare -ri isCompileProject=1  ## 1: E.g. C++, Rust, Go, etc.  0: E.g. Python, Bash, etc.
-	declare -r  exeName="nanogitdb"
+	declare -r  exeName="ngdb"
 	declare     dirPath_Base=".."
 	declare     dirPath_Source="${dirPath_Base}/source"
 	declare     filePath_ExecToTestAndInstall_BuildLocation="${dirPath_Base}/bin/${exeName}"  ## cicd/build.bash outputs straight to bin/
@@ -188,7 +188,7 @@ fMain(){
 		fEcho_Clean "Built ${filePath_ExecToTestAndInstall_BuildLocation}"
 
 		## Cross-compile: pure Go, so every target builds here with no extra toolchains.
-		## build.bash names cross outputs bin/nanogitdb-<os>-<arch>[.exe].
+		## build.bash names cross outputs bin/ngdb-<os>-<arch>[.exe].
 		fEcho_Clean; fEcho "Cross-compile (win-amd64, linux-arm64, win-arm64)"
 		GOOS=windows GOARCH=amd64  "${dirPath_Base}/cicd/build.bash"
 		GOOS=linux   GOARCH=arm64  "${dirPath_Base}/cicd/build.bash"
@@ -499,9 +499,10 @@ fMain  "${@}"
 ##			- Better cp args.
 ##			- Updated fEcho functions.
 ##			- Changed license from GPL2 to MIT.
-##		- 20260701 JC: Adapted from the convert-base-v2 template: nanogitdb name/paths, build.bash instead of make; cross-compile deferred to the CI/CD backlog item.
+##		- 20260701 JC: Adapted from the convert-base-v2 template: ngdb name/paths, build.bash instead of make; cross-compile deferred to the CI/CD backlog item.
 ##		- 20260701 JC: build.bash moved into cicd/ and now outputs straight to bin/; dropped the staging copy.
 ##		- 20260701 JC: Wired cross-compile (win-amd64, linux-arm64, win-arm64), the windows zip, and govulncheck.
 ##		- 20260703 JC: Replaced the post-build bare launch (which opened the TUI) with a --version check. Fixed the git-automation script path - it was missing the base prefix and doubled the cicd/ segment.
 ##		- 20260703 JC: Blank line between major stages for readability.
 ##		- 20260704 JC: Added -q/--quiet (unattended, flows to publish) and -m/--message (auto-generated under -q); stage headers use fEcho.
+##		- 20260704 JC: Renamed the built executable nanogitdb -> ngdb.

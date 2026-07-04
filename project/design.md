@@ -110,7 +110,7 @@ Standard Go layout, with the **module root under `source/`** so all source - inc
 ~~~text
 source/go.mod, go.sum         - module root (module github.com/jim-collier/nano-git-db)
 source/vendor/                - committed third-party deps; build uses -mod=vendor
-source/cmd/nanogitdb/main.go  - arg dispatch -> one of the four modes
+source/cmd/ngdb/main.go  - arg dispatch -> one of the four modes
 source/internal/core/         - engine: the single source of truth for all logic
 	ddl/                      - DDL parser + schema model
 	store/                    - SQLite view (modernc.org/sqlite), migrations
@@ -236,7 +236,7 @@ v1 notes: tunables live in a `tunables:` DDL section; both `key: value` and the 
 How a run finds a database when it was not handed the explicit `<ddl> <sqlite> <logdir>` triple:
 
 - A lone `*.ddl` in the current directory is used directly (the sqlite view defaults beside it, the tx-log dir is that directory). Zero or several `.ddl` files are ambiguous, so discovery falls through.
-- Otherwise the interactive front-end (bare `nanogitdb` or `--tui`) shows a registry picker; the non-interactive ones (`--serve`, CLI verbs) require the explicit paths and error otherwise (no picker).
+- Otherwise the interactive front-end (bare `ngdb` or `--tui`) shows a registry picker; the non-interactive ones (`--serve`, CLI verbs) require the explicit paths and error otherwise (no picker).
 
 The registry is per-database TOML records under a config base: `<os-user-config>/ngdb/<name>/config.toml`, where the base is `$XDG_CONFIG_HOME` (else `~/.config`) on Linux, `%AppData%` on Windows, `~/Library/Application Support` on macOS - whatever `os.UserConfigDir` returns. Read-only system bases (`$XDG_CONFIG_DIRS`, default `/etc/xdg`; `%ProgramData%` on Windows) are also searched, after the user base. A record holds: `name`, `ddl_path`, `log_dir` (the git-synced artifacts), `sqlite_path`, `key_file` (local, unsynced; both default beside the record and are rebuildable / re-fetchable), `encryption` and `last_opened`. `key_file`/`encryption` are stored for a stable format ahead of the encryption feature.
 
@@ -451,7 +451,7 @@ If external scripting files can be hosted in-executable, then it stands to reaso
 
 An external file stores functions for DDL-definable triggers, events, methods, etc.
 
-Decided: **Lua** via pure-Go `gopher-lua`, hosted in-executable. Scripts get a `db` global bound to the core CRUD API - `db.create/get/update/setfield/markdelete/delete/query` - so scripting shares the exact code path as every other front-end. The host is sandboxed: only base/table/string/math/coroutine are opened (no os, io, package, or debug). Reachable now via `nanogitdb --script <script.lua> <ddl> <sqlite> <logdir>`; DDL-wired triggers/methods build on this later.
+Decided: **Lua** via pure-Go `gopher-lua`, hosted in-executable. Scripts get a `db` global bound to the core CRUD API - `db.create/get/update/setfield/markdelete/delete/query` - so scripting shares the exact code path as every other front-end. The host is sandboxed: only base/table/string/math/coroutine are opened (no os, io, package, or debug). Reachable now via `ngdb --script <script.lua> <ddl> <sqlite> <logdir>`; DDL-wired triggers/methods build on this later.
 
 Original requirements (all met):
 

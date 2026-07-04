@@ -276,17 +276,17 @@ Trigger code gets the sandboxed `db.*` CRUD API (no `os`/`io`, no `dofile`). Wri
 
 ## Command-line interface
 
-Every data verb takes the same `<ddl> <sqlite> <logdir>` triple, then its own arguments. Run `nanogitdb` with no matching verb to print this usage.
+Every data verb takes the same `<ddl> <sqlite> <logdir>` triple, then its own arguments. Run `ngdb` with no matching verb to print this usage.
 
 Schema and log:
 
 ```
-nanogitdb ddl <file>                     parse a DDL and print a summary
-nanogitdb build <ddl> <sqlite>           build / migrate a SQLite view from a DDL
-nanogitdb replay <ddl> <sqlite> <dir>    rebuild the view from a tx-log dir
-nanogitdb sync <logdir>                  commit + pull/push the tx-log via git
-nanogitdb sync <ddl> <sqlite> <dir>      sync, then migrate the view and replay
-nanogitdb gc <ddl> <logdir>              collect entries of long-deleted rows (gc_age_days)
+ngdb ddl <file>                     parse a DDL and print a summary
+ngdb build <ddl> <sqlite>           build / migrate a SQLite view from a DDL
+ngdb replay <ddl> <sqlite> <dir>    rebuild the view from a tx-log dir
+ngdb sync <logdir>                  commit + pull/push the tx-log via git
+ngdb sync <ddl> <sqlite> <dir>      sync, then migrate the view and replay
+ngdb gc <ddl> <logdir>              collect entries of long-deleted rows (gc_age_days)
 ```
 
 Data (each after the `<ddl> <sqlite> <logdir>` triple):
@@ -314,8 +314,8 @@ attachments ... <table> <id>               list a row's attachments
 Schema ops (rewrite the DDL file and the SQLite view; the old name becomes an alias so existing log entries still replay):
 
 ```
-nanogitdb --rename-table <ddl> <sqlite> <old> <new>
-nanogitdb --rename-field <ddl> <sqlite> <table> <old> <new>
+ngdb --rename-table <ddl> <sqlite> <old> <new>
+ngdb --rename-field <ddl> <sqlite> <table> <old> <new>
 ```
 
 `setnull` is its own verb so a literal `NULL` string stays expressible via `update`. An empty value (`f=`) is the empty string.
@@ -323,9 +323,9 @@ nanogitdb --rename-field <ddl> <sqlite> <table> <old> <new>
 Setup flags:
 
 ```
-nanogitdb --init [path]              register the $PWD .ddl as a database (name = its base name)
-nanogitdb --config <dir> ...         use <dir> as the registry root, then run the rest
-nanogitdb --encrypt[=on|off|auto] .. set the local encryption preference, then run
+ngdb --init [path]              register the $PWD .ddl as a database (name = its base name)
+ngdb --config <dir> ...         use <dir> as the registry root, then run the rest
+ngdb --encrypt[=on|off|auto] .. set the local encryption preference, then run
 ```
 
 `--init` is the command-line equivalent of the picker's "Create new database": it registers the lone `*.ddl` in the current directory and materializes its view (build + seed), so it opens cleanly next time.
@@ -343,11 +343,11 @@ nanogitdb --encrypt[=on|off|auto] .. set the local encryption preference, then r
 The first argument selects the front-end; the default is the CLI.
 
 ```
-nanogitdb <verb> ...            CLI (above)
-nanogitdb --tui  <ddl> <sqlite> <logdir>          terminal UI
-nanogitdb --serve <ddl> <sqlite> <logdir>         local web UI on 127.0.0.1:8765
-nanogitdb --script <file.lua> <ddl> <sqlite> <logdir>   run a Lua script (enterprise build)
-nanogitdb --version                               print the version and exit (also -v)
+ngdb <verb> ...            CLI (above)
+ngdb --tui  <ddl> <sqlite> <logdir>          terminal UI
+ngdb --serve <ddl> <sqlite> <logdir>         local web UI on 127.0.0.1:8765
+ngdb --script <file.lua> <ddl> <sqlite> <logdir>   run a Lua script (enterprise build)
+ngdb --version                               print the version and exit (also -v)
 ```
 
 The web UI binds to `127.0.0.1` only - that binding is the access control for a single-user local UI. All four front-ends share one core CRUD API, so they behave identically.
@@ -356,7 +356,7 @@ In the TUI, press `T` to pick a colour theme (three dark, three light; the defau
 
 ## Startup discovery and the database registry
 
-When `--tui` or a bare `nanogitdb` is run without the explicit triple, it finds a database instead of erroring:
+When `--tui` or a bare `ngdb` is run without the explicit triple, it finds a database instead of erroring:
 
 - A lone `*.ddl` in the current directory is opened directly (its view defaults beside it, the tx-log dir is that directory).
 - Otherwise the TUI shows a picker of registered databases (unopenable ones flagged with the reason), plus "Create new database" and "Open existing ...".

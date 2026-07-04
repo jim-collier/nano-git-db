@@ -67,7 +67,8 @@ In each section, items are listed approximately from newest to oldest.
 
 - 🔘 Need to figure
 
-- Exe name should be 'ngdb'.
+- ✅ Exe name should be 'ngdb'.
+	- Done: the built binary and all user-facing references (CLI/TUI/web usage, version line, web title) are now `ngdb`; `cmd/nanogitdb` renamed to `cmd/ngdb`. The module path `nano-git-db` and the `NANOGITDB_USER`/`NANOGITDB_HOST` env vars are unchanged.
 
 - 🔘 Web UI: basic login. The web server has no authentication today. Localhost binding is the only gate, and every request acts as one default user, so it cannot be safely exposed.
 	- On a local machine, identify the user with no password. Use the git repository account name, or the operating system user when there is no repository.
