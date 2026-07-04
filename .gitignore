@@ -1,0 +1,13 @@
+# Build output
+/bin/
+/dist/
+*.exe
+
+# Local SQLite view (derived from the tx-log; rebuildable)
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Test/coverage
+*.out

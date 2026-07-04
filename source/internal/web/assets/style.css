@@ -1,0 +1,16 @@
+body { font-family: sans-serif; margin: 0; display: flex; min-height: 100vh; }
+#side { width: 14em; background: #20242a; color: #dde; padding: 1em; }
+#side h1 { font-size: 1.1em; margin-top: 0; }
+#side ul { list-style: none; padding: 0; }
+#side a { color: #9cf; text-decoration: none; display: block; padding: 0.15em 0; }
+#side a:hover { color: #fff; }
+#main { flex: 1; padding: 1em 1.5em; }
+.hint { color: #888; }
+table { border-collapse: collapse; }
+th, td { border: 1px solid #ccc; padding: 0.25em 0.6em; text-align: left; }
+th { background: #eee; }
+label { display: inline-block; margin: 0.3em 0; }
+input { min-width: 24em; }
+button { margin-right: 0.3em; }
+.vblock { border: 1px solid #ccc; padding: 0.4em 0.6em; }
+.vblock h3 { margin: 0.2em 0; font-size: 1em; }

@@ -1,0 +1,24 @@
+<h2>{{.Name}} (view)</h2>
+<p class="hint">Blocks load nothing until you ask.</p>
+{{if .Queries}}
+<form hx-get="/v/{{.Name}}/q" hx-target="#vb-0">
+	<select name="name">{{range .Queries}}<option>{{.Name}}</option>{{end}}</select>
+	<button type="submit">Run query</button>
+</form>
+{{end}}
+{{template "vblock" .Root}}
+{{if .StartupQuery}}<div hx-get="/v/{{.Name}}/q?name={{.StartupQuery | urlquery}}" hx-trigger="load" hx-target="#vb-0"></div>{{end}}
+
+{{define "vblock"}}
+{{if .Leaf}}
+<div class="vblock" style="{{.Style}}">
+	<h3>{{.Title}}</h3>
+	<p><button hx-get="/v/{{.View}}/b/{{.Index}}/rows" hx-target="#vb-{{.Index}}">All</button></p>
+	<div id="vb-{{.Index}}"></div>
+</div>
+{{else}}
+<div style="{{.Style}}{{.DirStyle}}">
+	{{range .Children}}{{template "vblock" .}}{{end}}
+</div>
+{{end}}
+{{end}}

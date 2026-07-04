@@ -1,0 +1,34 @@
+<h2>{{if .ID}}edit {{.Table}} {{short .ID}}{{else}}new {{.Table}}{{end}}</h2>
+<form hx-post="/t/{{.Table}}{{if .ID}}/{{.ID}}{{end}}" hx-target="#main">
+	{{$r := .Row}}
+	{{range .Fields}}
+	<label>{{.}}<br><input name="{{.}}" value="{{index $r .}}"></label><br>
+	{{end}}
+	<button type="submit">Save</button>
+	<button type="button" hx-get="/t/{{.Table}}" hx-target="#main">Cancel</button>
+</form>
+{{if .CanComment}}
+<h3>comments</h3>
+<ul>
+	{{range .Comments}}<li><small>{{index . "date_created"}}</small> {{index . "comment"}}</li>{{else}}<li class="hint">(none)</li>{{end}}
+</ul>
+<form hx-post="/t/{{.Table}}/{{.ID}}/comment" hx-target="#main">
+	<input name="comment" placeholder="add a comment">
+	<button type="submit">Add</button>
+</form>
+{{end}}
+{{if or .CanAttachURI .CanAttachFile}}
+<h3>attachments</h3>
+<ul>
+	{{range .Attachments}}<li>[{{.Kind}}] {{.Label}} <small>{{.Description}}</small></li>{{else}}<li class="hint">(none)</li>{{end}}
+</ul>
+<form hx-post="/t/{{.Table}}/{{.ID}}/attach" hx-target="#main">
+	{{if and .CanAttachURI .CanAttachFile}}
+	<select name="kind"><option value="uri">uri</option><option value="file">file</option></select>
+	{{else if .CanAttachFile}}<input type="hidden" name="kind" value="file">
+	{{else}}<input type="hidden" name="kind" value="uri">{{end}}
+	<input name="target" placeholder="{{if .CanAttachURI}}uri or {{end}}local path">
+	<input name="description" placeholder="description">
+	<button type="submit">Attach</button>
+</form>
+{{end}}

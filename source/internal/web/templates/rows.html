@@ -1,0 +1,20 @@
+<h2>{{.Table}} ({{len .Rows}})</h2>
+<p>
+	<button hx-get="/t/{{.Table}}/new" hx-target="#main">New</button>
+	<button hx-get="/t/{{.Table}}" hx-target="#main">Reload</button>
+</p>
+{{$t := .Table}}
+<table>
+	<tr>{{range .Cols}}<th>{{.}}</th>{{end}}<th></th></tr>
+	{{range .Rows}}
+	{{$r := .}}
+	<tr>
+		{{range $.Cols}}<td>{{if eq . "id"}}{{short (index $r .)}}{{else}}{{index $r .}}{{end}}</td>{{end}}
+		<td>
+			<button hx-get="/t/{{$t}}/{{index $r "id"}}/edit" hx-target="#main">edit</button>
+			<button hx-post="/t/{{$t}}/{{index $r "id"}}/delete" hx-target="#main" hx-confirm="Soft-delete this row?">del</button>
+			<button hx-post="/t/{{$t}}/{{index $r "id"}}/delete" hx-vals='{"hard":"1"}' hx-target="#main" hx-confirm="PERMANENTLY delete this row?">DEL</button>
+		</td>
+	</tr>
+	{{end}}
+</table>

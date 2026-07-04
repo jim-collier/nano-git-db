@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>nanogitdb</title>
+	<script src="/assets/htmx.min.js"></script>
+	<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+	<div id="side">
+		<h1>nanogitdb</h1>
+		{{if .Views}}
+		<ul>
+		{{range .Views}}
+			<li><a href="#" hx-get="/v/{{.Name}}" hx-target="#main">{{.Name}} (view)</a></li>
+		{{end}}
+		</ul>
+		{{end}}
+		<ul>
+		{{range .Tables}}
+			<li><a href="#" hx-get="/t/{{.}}" hx-target="#main">{{.}}</a></li>
+		{{end}}
+		</ul>
+	</div>
+	<div id="main">
+		{{if .DefaultView}}
+		<div hx-get="/v/{{.DefaultView}}" hx-trigger="load" hx-target="#main"></div>
+		{{else}}
+		<p class="hint">Pick a view or table. No records are shown until you ask.</p>
+		{{end}}
+	</div>
+</body>
+</html>

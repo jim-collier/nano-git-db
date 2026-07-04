@@ -1,0 +1,7 @@
+<p class="hint">{{.Name}}: {{len .Rows}} rows</p>
+<table>
+	<tr>{{range .Cols}}<th>{{.}}</th>{{end}}</tr>
+	{{range $r := .Rows}}
+	<tr>{{range $c := $.Cols}}<td>{{if eq $c "id"}}{{short (index $r $c)}}{{else}}{{index $r $c}}{{end}}</td>{{end}}</tr>
+	{{end}}
+</table>

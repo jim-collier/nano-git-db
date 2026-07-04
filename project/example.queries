@@ -1,0 +1,14 @@
+## Predefined queries - sidecar to example.ddl (same base name, .queries extension).
+## Same grammar as the DDL. A view's startup_named_query names one of these;
+## the UIs also offer them in a per-view dropdown.
+
+query_name: "All rows"
+	view:    "people"
+	sort:    1
+	active:  yes
+	SQL:     `SELECT * FROM table_name1 WHERE is_deleted = 0`
+
+query_name: "Recently created"
+	view:    "people"
+	sort:    2
+	SQL:     `SELECT * FROM table_name1 WHERE is_deleted = 0 ORDER BY date_created DESC LIMIT 25`
