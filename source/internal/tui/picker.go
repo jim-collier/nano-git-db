@@ -4,6 +4,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -30,7 +31,8 @@ type picker struct {
 	list    *tview.List
 	status  *tview.TextView
 	listed  []config.Listed
-	actions []func() // per list row; nil for a blank spacer row
+	actions []func()         // per list row; nil for a blank spacer row
+	rowDB   []*config.Listed // per list row; the record behind a removable db row, else nil
 	result  *pickResult
 }
 
@@ -64,45 +66,15 @@ func (p *picker) build() {
 		SetBorder(true).SetTitle(" nano-git-db ").
 		SetBorderPadding(1, 1, 3, 3)
 
-	// Build the entries with their actions, then lay them out interleaved with
-	// spacer rows. actions[i] indexes list rows 1:1; a nil action = a spacer.
-	type entry struct {
-		main, sub string
-		act       func()
-	}
-	var entries []entry
-	for _, l := range p.listed {
-		l := l
-		main := l.Name
-		sub := l.Dir
-		if l.System {
-			main += "  (system)"
-		}
-		if l.Err != nil {
-			main = "[!] " + main
-			sub = l.Err.Error()
-		}
-		entries = append(entries, entry{main, sub, func() { p.chooseListed(l) }})
-	}
-	entries = append(entries,
-		entry{"Create new database", "register a new database and open it", p.createForm},
-		entry{"Open existing ...", "open a DDL + tx-log without registering", p.openForm})
-	for i, e := range entries {
-		if i > 0 {
-			p.list.AddItem("", "", 0, nil)
-			p.actions = append(p.actions, nil)
-		}
-		p.list.AddItem(e.main, e.sub, 0, nil)
-		p.actions = append(p.actions, e.act)
-	}
+	p.populate()
 	p.list.SetSelectedFunc(func(i int, _, _ string, _ rune) {
 		if i >= 0 && i < len(p.actions) && p.actions[i] != nil {
 			p.actions[i]()
 		}
 	})
 	// Up/Down step over the blank spacer rows so the highlight only ever rests
-	// on a real entry. First and last rows are always real, so it never runs
-	// off the ends.
+	// on a real entry (first and last rows are always real); d removes the
+	// highlighted database.
 	p.list.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 		switch {
 		case ev.Key() == tcell.KeyDown || ev.Rune() == 'j':
@@ -111,12 +83,15 @@ func (p *picker) build() {
 		case ev.Key() == tcell.KeyUp || ev.Rune() == 'k':
 			p.moveSelection(-1)
 			return nil
+		case ev.Rune() == 'd' || ev.Key() == tcell.KeyDelete:
+			p.removeCurrent()
+			return nil
 		}
 		return ev
 	})
 
 	p.status.SetDynamicColors(true)
-	p.setStatus("enter=open | Create/Open to make or open one | q=quit")
+	p.setStatus("enter=open | d=remove | Create/Open to make or open one | q=quit")
 
 	// Center the menu as a bordered panel with margins around it, instead of
 	// filling the whole screen. Proportional spacers keep it centred at any
@@ -158,6 +133,124 @@ func (p *picker) moveSelection(dir int) {
 	if i >= 0 && i < n {
 		p.list.SetCurrentItem(i)
 	}
+}
+
+// populate fills the list from p.listed: each registered database (unopenable
+// ones flagged), then Create/Open, with a blank spacer row between entries.
+// actions[i] and rowDB[i] track list rows 1:1 - a nil action marks a spacer;
+// rowDB holds the record behind a removable database row (nil for spacers, the
+// Create/Open rows, and read-only system records).
+func (p *picker) populate() {
+	p.list.Clear()
+	p.actions = p.actions[:0]
+	p.rowDB = p.rowDB[:0]
+	type entry struct {
+		main, sub string
+		act       func()
+		db        *config.Listed
+	}
+	var entries []entry
+	for i := range p.listed {
+		l := &p.listed[i]
+		main := l.Name
+		sub := l.Dir
+		if l.System {
+			main += "  (system)"
+		}
+		if l.Err != nil {
+			main = "[!] " + main
+			sub = l.Err.Error()
+		}
+		ll := *l
+		// A record is removable only when it loaded and is not a read-only
+		// system record; a broken ([!]) user record still is - that's the point.
+		var rec *config.Listed
+		if l.Config != nil && !l.System {
+			rec = l
+		}
+		entries = append(entries, entry{main, sub, func() { p.chooseListed(ll) }, rec})
+	}
+	entries = append(entries,
+		entry{"Create new database", "register a new database and open it", p.createForm, nil},
+		entry{"Open existing ...", "open a DDL + tx-log without registering", p.openForm, nil})
+	for i, e := range entries {
+		if i > 0 {
+			p.list.AddItem("", "", 0, nil)
+			p.actions = append(p.actions, nil)
+			p.rowDB = append(p.rowDB, nil)
+		}
+		p.list.AddItem(e.main, e.sub, 0, nil)
+		p.actions = append(p.actions, e.act)
+		p.rowDB = append(p.rowDB, e.db)
+	}
+}
+
+// removeCurrent starts the remove flow for the highlighted row, if it is a
+// removable database.
+func (p *picker) removeCurrent() {
+	i := p.list.GetCurrentItem()
+	if i >= 0 && i < len(p.rowDB) && p.rowDB[i] != nil {
+		p.confirmRemove(p.rowDB[i].Config)
+	}
+}
+
+// confirmRemove asks before deregistering a database, then - only if it has
+// files on disk - offers a second confirm to delete those too (default keep).
+// Deregister leaves the tx-log/sqlite/key/DDL in place.
+func (p *picker) confirmRemove(cfg *config.DBConfig) {
+	msg := fmt.Sprintf("Remove %q from the list?\n(its files stay on disk)", cfg.Name)
+	p.modal("remove", msg, []string{"Remove", "Cancel"}, func(label string) {
+		if label != "Remove" {
+			return
+		}
+		if err := cfg.Deregister(); err != nil {
+			p.setStatus("remove failed: " + err.Error())
+			return
+		}
+		if cfg.HasFiles() {
+			p.confirmDeleteFiles(cfg)
+			return
+		}
+		p.refresh("removed " + cfg.Name)
+	})
+}
+
+// confirmDeleteFiles offers to also delete the deregistered database's files.
+// The default (first button) keeps them; the DDL is never deleted.
+func (p *picker) confirmDeleteFiles(cfg *config.DBConfig) {
+	msg := fmt.Sprintf("Also delete its files? (kept by default)\n  tx-log: %s\n  record: %s\n(the .ddl schema is kept)", cfg.LogDir, cfg.Dir())
+	p.modal("delfiles", msg, []string{"Keep files", "Delete files"}, func(label string) {
+		if label == "Delete files" {
+			if err := cfg.DeleteFiles(); err != nil {
+				p.setStatus("delete failed: " + err.Error())
+				p.refresh("removed " + cfg.Name)
+				return
+			}
+			p.refresh("deleted " + cfg.Name)
+			return
+		}
+		p.refresh("removed " + cfg.Name + " (files kept)")
+	})
+}
+
+// modal shows a confirm dialog; the first button is the default. It closes
+// itself and refocuses the list before calling fn, so fn may open a follow-up.
+func (p *picker) modal(name, msg string, buttons []string, fn func(label string)) {
+	m := tview.NewModal().SetText(msg).AddButtons(buttons).
+		SetDoneFunc(func(_ int, label string) {
+			p.pages.RemovePage(name)
+			p.app.SetFocus(p.list)
+			fn(label)
+		})
+	p.pages.AddPage(name, m, true, true)
+	p.app.SetFocus(m)
+}
+
+// refresh re-reads the registry and rebuilds the list after a change.
+func (p *picker) refresh(status string) {
+	p.listed = config.List()
+	p.populate()
+	p.setStatus(status)
 }
 
 // chooseListed opens a registered database, or reports why it can't open.

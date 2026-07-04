@@ -128,6 +128,36 @@ func TestPickerSkipsSpacers(t *testing.T) {
 	}
 }
 
+// Pressing d on a database, confirming Remove, then keeping its files,
+// deregisters it: it leaves the list and the registry, but its files stay.
+func TestPickerRemovesDatabase(t *testing.T) {
+	isolateConfig(t)
+	ddlPath := writeValidDDL(t)
+	logDir := t.TempDir()
+	if _, err := config.Create("todo", ddlPath, logDir); err != nil {
+		t.Fatal(err)
+	}
+
+	screen, out, waitFor := runPicker(t)
+	waitFor("todo")
+	screen.InjectKey(tcell.KeyRune, 'd', tcell.ModNone) // remove the highlighted db
+	waitFor("Cancel")                                   // first confirm (Remove/Cancel)
+	screen.InjectKey(tcell.KeyEnter, 0, tcell.ModNone)  // default button = Remove
+	waitFor("Keep files")                               // second confirm (logDir exists)
+	screen.InjectKey(tcell.KeyEnter, 0, tcell.ModNone)  // default button = Keep files
+	waitFor("files kept")                               // status after the refresh
+
+	if got := config.List(); len(got) != 0 {
+		t.Fatalf("registry still has %d records after remove", len(got))
+	}
+	if _, err := os.Stat(logDir); err != nil {
+		t.Fatalf("tx-log wrongly deleted (files were kept): %v", err)
+	}
+
+	screen.InjectKey(tcell.KeyRune, 'q', tcell.ModNone)
+	<-out
+}
+
 // An unopenable record (its DDL is gone) shows with the [!] marker, cannot be
 // opened, and q quits the picker with no result.
 func TestPickerFlagsBrokenAndQuits(t *testing.T) {
