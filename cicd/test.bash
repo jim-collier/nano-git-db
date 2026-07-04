@@ -3,7 +3,7 @@
 ##	Purpose:
 ##		- CI/CD-friendly test harness that passes or fails.
 ##		- Static checks (go vet, gofmt) plus the full Go test suite, run from source/ (the module root).
-##		- Smoke-tests the built binary if one is present.
+##		- Does not launch the built binary - that stays a separate manual step before the merge.
 ##	History: At bottom of this file. (Note: History for this is maintained outside of [or in addition to] git project.)
 
 ##	Copyright © 2026 Jim Collier (ID: 1cv◂‡Vᛦ)
@@ -24,13 +24,8 @@ unformatted="$(gofmt -l cmd internal)"
 echo "go test ..."
 go test -mod=vendor ./...
 
-## Smoke-test the built binary if present. --help prints usage and exits 0.
-## A bare invocation would try to open the TUI, which needs a terminal.
-exe="../bin/nanogitdb"
-if [[ -x "${exe}" ]]; then
-	echo "smoke test: ${exe}"
-	"${exe}" --help >/dev/null
-fi
+## No binary launch here - the app is left for a separate manual run before
+## the merge, so it can be cancelled if it misbehaves.
 
 echo "test.bash: PASS"
 
@@ -39,3 +34,4 @@ echo "test.bash: PASS"
 ##		- 20260420 JC: Created (convert-base-v2 template).
 ##		- 20260701 JC: Replaced the template's round-trip suite with this project's Go checks.
 ##		- 20260701 JC: Binary moved to bin/ (build.bash now lives in cicd/ and outputs there).
+##		- 20260703 JC: Dropped the binary smoke test - launching stays a separate manual step.
