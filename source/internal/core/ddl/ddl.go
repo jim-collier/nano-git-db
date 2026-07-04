@@ -34,18 +34,18 @@ var encValues = map[string]bool{"": true, "always": true, "never": true, "auto":
 // encOf reads and validates an encryption: child. An unknown value warns and is
 // treated as unset (auto).
 func encOf(n *Node, s *Schema, where string) string {
-	c := n.child("encryption")
-	if c == nil {
+	child := n.child("encryption")
+	if child == nil {
 		return ""
 	}
-	v, _ := Unquote(strings.TrimSpace(c.Value))
-	v = strings.ToLower(v)
-	if !encValues[v] {
+	value, _ := Unquote(strings.TrimSpace(child.Value))
+	value = strings.ToLower(value)
+	if !encValues[value] {
 		s.Warnings = append(s.Warnings,
-			fmt.Sprintf("line %d: %s encryption %q is not always|never|auto, ignored", c.Line, where, v))
+			fmt.Sprintf("line %d: %s encryption %q is not always|never|auto, ignored", child.Line, where, value))
 		return ""
 	}
-	return v
+	return value
 }
 
 // knownTunables gets a warning gate like every other load validation; the
@@ -55,15 +55,15 @@ var knownTunables = map[string]bool{"git_sync_frequency": true, "gc_age_days": t
 // TunableInt reads a tunable as an integer, falling back on absent or
 // non-numeric values.
 func (s *Schema) TunableInt(key string, def int) int {
-	v, ok := s.Tunables[key]
+	value, ok := s.Tunables[key]
 	if !ok {
 		return def
 	}
-	n, ok := AsInt(v)
+	num, ok := AsInt(value)
 	if !ok {
 		return def
 	}
-	return n
+	return num
 }
 
 // AccessRule is one allow/deny pair. Empty whitelist means "all".
@@ -201,20 +201,20 @@ func (s *Schema) mapTunables(n *Node) {
 	if s.Tunables == nil {
 		s.Tunables = map[string]string{}
 	}
-	for _, c := range n.Children {
-		key, val := c.Key, c.Value
-		if c.List {
+	for _, child := range n.Children {
+		key, val := child.Key, child.Value
+		if child.List {
 			var ok bool
-			key, val, ok = strings.Cut(c.Value, "=")
+			key, val, ok = strings.Cut(child.Value, "=")
 			if !ok {
 				s.Warnings = append(s.Warnings,
-					fmt.Sprintf("line %d: tunable %q is not key: value or key = value, ignored", c.Line, c.Value))
+					fmt.Sprintf("line %d: tunable %q is not key: value or key = value, ignored", child.Line, child.Value))
 				continue
 			}
 			key = strings.TrimSpace(key)
 		}
 		if !knownTunables[key] {
-			s.Warnings = append(s.Warnings, fmt.Sprintf("line %d: unknown tunable %q", c.Line, key))
+			s.Warnings = append(s.Warnings, fmt.Sprintf("line %d: unknown tunable %q", child.Line, key))
 		}
 		if _, dup := s.Tunables[key]; dup {
 			continue // first value wins, like every other merge
@@ -268,16 +268,16 @@ func (s *Schema) mapSections(n *Node) {
 		case "tunables":
 			s.mapTunables(sec)
 		case "tables":
-			for _, t := range sec.all("table") {
-				tbl := parseTable(t, s)
+			for _, tableNode := range sec.all("table") {
+				tbl := parseTable(tableNode, s)
 				if tbl.Name == "" {
 					s.Warnings = append(s.Warnings,
-						fmt.Sprintf("line %d: table with no name, dropped", t.Line))
+						fmt.Sprintf("line %d: table with no name, dropped", tableNode.Line))
 					continue
 				}
 				if prev := s.table(tbl.Name); prev != nil {
 					s.Warnings = append(s.Warnings, fmt.Sprintf(
-						"line %d: table %q already defined on line %d; the first definition wins", t.Line, tbl.Name, prev.Line))
+						"line %d: table %q already defined on line %d; the first definition wins", tableNode.Line, tbl.Name, prev.Line))
 					continue
 				}
 				s.Tables = append(s.Tables, tbl)
@@ -304,59 +304,59 @@ func parseTable(n *Node, s *Schema) Table {
 	t := Table{Name: name, Line: n.Line, Code: map[string]string{}}
 	t.Aliases = listOf(n, "aliases")
 	t.Encryption = encOf(n, s, "table "+name)
-	if p := boolOf(n, "system_fields"); p != nil && !*p {
+	if systemFields := boolOf(n, "system_fields"); systemFields != nil && !*systemFields {
 		t.NoSystemFields = true
 	}
-	if a := n.child("access"); a != nil {
-		t.Access = parseAccessRWD(a)
+	if accessNode := n.child("access"); accessNode != nil {
+		t.Access = parseAccessRWD(accessNode)
 	}
-	if f := n.child("fields"); f != nil {
-		for _, fn := range f.all("field") {
-			fld := parseField(fn, s)
-			if fld.Name == "" {
+	if fieldsNode := n.child("fields"); fieldsNode != nil {
+		for _, fieldNode := range fieldsNode.all("field") {
+			field := parseField(fieldNode, s)
+			if field.Name == "" {
 				s.Warnings = append(s.Warnings,
-					fmt.Sprintf("line %d: field with no name in table %q, dropped", fn.Line, t.Name))
+					fmt.Sprintf("line %d: field with no name in table %q, dropped", fieldNode.Line, t.Name))
 				continue
 			}
 			// hasField covers both a redefined field and a collision with the
 			// auto-added system columns - either would double a column.
-			if t.hasField(fld.Name) {
+			if t.hasField(field.Name) {
 				what := "already defined; the first definition wins"
-				if fld.Name == "id" || !t.NoSystemFields &&
-					(fld.Name == "is_active" || fld.Name == "is_deleted" || fld.Name == "date_created") {
+				if field.Name == "id" || !t.NoSystemFields &&
+					(field.Name == "is_active" || field.Name == "is_deleted" || field.Name == "date_created") {
 					what = "collides with an auto-added system field, dropped"
 				}
 				s.Warnings = append(s.Warnings,
-					fmt.Sprintf("line %d: field %q in table %q %s", fn.Line, fld.Name, t.Name, what))
+					fmt.Sprintf("line %d: field %q in table %q %s", fieldNode.Line, field.Name, t.Name, what))
 				continue
 			}
-			t.Fields = append(t.Fields, fld)
+			t.Fields = append(t.Fields, field)
 		}
 	}
-	if m := firstChild(n, "code", "methods"); m != nil {
-		collectCode(m, t.Code)
+	if codeNode := firstChild(n, "code", "methods"); codeNode != nil {
+		collectCode(codeNode, t.Code)
 	}
-	if u := n.child("uniques"); u != nil {
-		for _, row := range u.items() {
-			grp := SplitList(row.Value)
-			t.Uniques = append(t.Uniques, grp)
-			warnUnknownFields(s, &t, row.Line, "uniques", grp)
+	if uniquesNode := n.child("uniques"); uniquesNode != nil {
+		for _, row := range uniquesNode.items() {
+			group := SplitList(row.Value)
+			t.Uniques = append(t.Uniques, group)
+			warnUnknownFields(s, &t, row.Line, "uniques", group)
 		}
 	}
-	if ix := n.child("indexes"); ix != nil {
-		for _, row := range ix.items() {
-			grp := SplitList(row.Value)
-			t.Indexes = append(t.Indexes, grp)
-			warnUnknownFields(s, &t, row.Line, "indexes", grp)
+	if indexesNode := n.child("indexes"); indexesNode != nil {
+		for _, row := range indexesNode.items() {
+			group := SplitList(row.Value)
+			t.Indexes = append(t.Indexes, group)
+			warnUnknownFields(s, &t, row.Line, "indexes", group)
 		}
 	}
-	if ft := n.child("features"); ft != nil {
+	if featuresNode := n.child("features"); featuresNode != nil {
 		t.Features = Features{
-			LocalAttachments: boolDefault(ft, "local_attachments"),
-			URIAttachments:   boolDefault(ft, "uri_attachments"),
-			Comments:         boolDefault(ft, "comments"),
-			AuditTrail:       boolDefault(ft, "audit_trail"),
-			RowLevelAccess:   boolDefault(ft, "row_level_access"),
+			LocalAttachments: boolDefault(featuresNode, "local_attachments"),
+			URIAttachments:   boolDefault(featuresNode, "uri_attachments"),
+			Comments:         boolDefault(featuresNode, "comments"),
+			AuditTrail:       boolDefault(featuresNode, "audit_trail"),
+			RowLevelAccess:   boolDefault(featuresNode, "row_level_access"),
 		}
 	}
 	return t
@@ -373,8 +373,8 @@ func parseField(n *Node, s *Schema) Field {
 	name, _ := Unquote(n.Value)
 	f := Field{Name: name, Line: n.Line, Code: map[string]string{}}
 	f.Aliases = listOf(n, "aliases")
-	if a := n.child("access"); a != nil {
-		f.Access = parseAccessRWD(a)
+	if accessNode := n.child("access"); accessNode != nil {
+		f.Access = parseAccessRWD(accessNode)
 	}
 	f.Type = strings.ToLower(strOf(n, "type"))
 	if !fieldTypes[f.Type] {
@@ -387,32 +387,32 @@ func parseField(n *Node, s *Schema) Field {
 	f.Default = rawOf(n, "defaultval")
 	f.NullOK = boolOf(n, "null_ok")
 	f.EmptyOK = boolOf(n, "empty_ok")
-	if v := n.child("validation"); v != nil {
+	if validationNode := n.child("validation"); validationNode != nil {
 		f.Validation = Validation{
-			Required: boolOf(v, "required"),
-			MinLen:   intOf(v, "minlen"),
-			MaxLen:   intOf(v, "maxlen"),
-			MinVal:   floatOf(v, "minval"),
-			MaxVal:   floatOf(v, "maxval"),
-			Regex:    strOf(v, "regex"),
-			Method:   rawOf(v, "method"),
+			Required: boolOf(validationNode, "required"),
+			MinLen:   intOf(validationNode, "minlen"),
+			MaxLen:   intOf(validationNode, "maxlen"),
+			MinVal:   floatOf(validationNode, "minval"),
+			MaxVal:   floatOf(validationNode, "maxval"),
+			Regex:    strOf(validationNode, "regex"),
+			Method:   rawOf(validationNode, "method"),
 		}
 	}
-	if m := firstChild(n, "code", "methods"); m != nil {
-		collectCode(m, f.Code)
+	if codeNode := firstChild(n, "code", "methods"); codeNode != nil {
+		collectCode(codeNode, f.Code)
 	}
-	if u := n.child("ui"); u != nil {
+	if uiNode := n.child("ui"); uiNode != nil {
 		f.UI = FieldUI{
-			Visible:    boolOf(u, "visible"),
-			Title:      strOf(u, "title"),
-			Desc:       strOf(u, "description"),
-			Order:      floatOf(u, "order"),
-			Readonly:   boolOf(u, "readonly"),
-			Width:      intOf(u, "width"),
-			Widget:     strOf(u, "widget"),
-			ListType:   strOf(u, "list_type"),
-			ListSource: rawOf(u, "list_source"),
-			Format:     strOf(u, "format"),
+			Visible:    boolOf(uiNode, "visible"),
+			Title:      strOf(uiNode, "title"),
+			Desc:       strOf(uiNode, "description"),
+			Order:      floatOf(uiNode, "order"),
+			Readonly:   boolOf(uiNode, "readonly"),
+			Width:      intOf(uiNode, "width"),
+			Widget:     strOf(uiNode, "widget"),
+			ListType:   strOf(uiNode, "list_type"),
+			ListSource: rawOf(uiNode, "list_source"),
+			Format:     strOf(uiNode, "format"),
 		}
 	}
 	return f
@@ -441,12 +441,12 @@ func parseView(n *Node) View {
 		v.StartupNamedQuery, _ = Unquote(rawOf(n, "default_named_query"))
 	}
 	v.Readonly = boolOf(n, "readonly")
-	if a := n.child("access"); a != nil {
-		v.Access = accessFlat(a)
+	if accessNode := n.child("access"); accessNode != nil {
+		v.Access = accessFlat(accessNode)
 	}
-	if l := n.child("layout"); l != nil {
-		for _, b := range l.all("block") {
-			v.Layout = append(v.Layout, parseBlock(b))
+	if layoutNode := n.child("layout"); layoutNode != nil {
+		for _, blockNode := range layoutNode.all("block") {
+			v.Layout = append(v.Layout, parseBlock(blockNode))
 		}
 	}
 	return v
@@ -462,8 +462,8 @@ func parseBlock(n *Node) Block {
 		Location:    listOf(n, "location"),
 		Readonly:    boolOf(n, "readonly"),
 	}
-	for _, c := range n.all("block") {
-		b.Children = append(b.Children, parseBlock(c))
+	for _, childNode := range n.all("block") {
+		b.Children = append(b.Children, parseBlock(childNode))
 	}
 	return b
 }
@@ -490,8 +490,8 @@ func accessFlat(n *Node) AccessRule {
 
 // warnUnknownFields flags uniques/indexes rows naming fields the table doesn't
 // have - caught here at parse time instead of as an opaque SQLite error later.
-func warnUnknownFields(s *Schema, t *Table, line int, kind string, grp []string) {
-	for _, name := range grp {
+func warnUnknownFields(s *Schema, t *Table, line int, kind string, fields []string) {
+	for _, name := range fields {
 		if !t.hasField(name) {
 			s.Warnings = append(s.Warnings, fmt.Sprintf(
 				"line %d: %s names unknown field %q in table %q", line, kind, name, t.Name))
@@ -551,9 +551,9 @@ func (s *Schema) EncryptionPolicy(table, field string) string {
 			levels = append(levels, f.Encryption)
 		}
 	}
-	for _, lv := range levels {
-		if lv == "always" || lv == "never" {
-			return lv
+	for _, level := range levels {
+		if level == "always" || level == "never" {
+			return level
 		}
 	}
 	return "auto"
@@ -577,59 +577,59 @@ func (t *Table) hasField(name string) bool {
 // -- small node accessors --
 
 func collectCode(n *Node, dst map[string]string) {
-	for _, c := range n.Children {
-		if c.Key != "" && c.Value != "" {
-			dst[c.Key] = c.Value
+	for _, child := range n.Children {
+		if child.Key != "" && child.Value != "" {
+			dst[child.Key] = child.Value
 		}
 	}
 }
 
 func firstChild(n *Node, keys ...string) *Node {
-	for _, k := range keys {
-		if c := n.child(k); c != nil {
-			return c
+	for _, key := range keys {
+		if child := n.child(key); child != nil {
+			return child
 		}
 	}
 	return nil
 }
 
 func firstList(n *Node, keys ...string) []string {
-	for _, k := range keys {
-		if c := n.child(k); c != nil {
-			return SplitList(c.Value)
+	for _, key := range keys {
+		if child := n.child(key); child != nil {
+			return SplitList(child.Value)
 		}
 	}
 	return nil
 }
 
 func listOf(n *Node, key string) []string {
-	if c := n.child(key); c != nil {
-		return SplitList(c.Value)
+	if child := n.child(key); child != nil {
+		return SplitList(child.Value)
 	}
 	return nil
 }
 
 func strOf(n *Node, key string) string {
-	if c := n.child(key); c != nil {
-		s, _ := Unquote(c.Value)
+	if child := n.child(key); child != nil {
+		s, _ := Unquote(child.Value)
 		return s
 	}
 	return ""
 }
 
 func rawOf(n *Node, key string) string {
-	if c := n.child(key); c != nil {
-		return c.Value
+	if child := n.child(key); child != nil {
+		return child.Value
 	}
 	return ""
 }
 
 func boolOf(n *Node, key string) *bool {
-	c := n.child(key)
-	if c == nil || c.Value == "" {
+	child := n.child(key)
+	if child == nil || child.Value == "" {
 		return nil
 	}
-	if b, ok := AsBool(c.Value); ok {
+	if b, ok := AsBool(child.Value); ok {
 		return &b
 	}
 	return nil
@@ -637,29 +637,29 @@ func boolOf(n *Node, key string) *bool {
 
 // boolDefault is boolOf with a false default (for keys whose default is off).
 func boolDefault(n *Node, key string) bool {
-	if p := boolOf(n, key); p != nil {
-		return *p
+	if val := boolOf(n, key); val != nil {
+		return *val
 	}
 	return false
 }
 
 func intOf(n *Node, key string) *int {
-	c := n.child(key)
-	if c == nil || c.Value == "" {
+	child := n.child(key)
+	if child == nil || child.Value == "" {
 		return nil
 	}
-	if i, ok := AsInt(c.Value); ok {
+	if i, ok := AsInt(child.Value); ok {
 		return &i
 	}
 	return nil
 }
 
 func floatOf(n *Node, key string) *float64 {
-	c := n.child(key)
-	if c == nil || c.Value == "" {
+	child := n.child(key)
+	if child == nil || child.Value == "" {
 		return nil
 	}
-	if f, ok := AsFloat(c.Value); ok {
+	if f, ok := AsFloat(child.Value); ok {
 		return &f
 	}
 	return nil

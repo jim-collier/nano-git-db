@@ -110,11 +110,11 @@ func (a *API) Create(table string, fields map[string]string) (string, error) {
 	}
 	id := newID()
 	entries := []txlog.Entry{a.entry(table, id, "", "create", "")}
-	for _, k := range sortedKeys(fields) {
-		if k == "id" {
+	for _, field := range sortedKeys(fields) {
+		if field == "id" {
 			continue
 		}
-		entries = append(entries, a.entry(table, id, k, "update", fields[k]))
+		entries = append(entries, a.entry(table, id, field, "update", fields[field]))
 	}
 	entries = append(entries, a.audit(table, id, "create", nil)...)
 	if err := a.commit(entries); err != nil {
@@ -136,11 +136,11 @@ func (a *API) Update(table, id string, fields map[string]string) error {
 	// audit next: it reads the OLD values, which the entries then overwrite
 	audit := a.audit(table, id, "update", fields)
 	var entries []txlog.Entry
-	for _, k := range sortedKeys(fields) {
-		if k == "id" {
+	for _, field := range sortedKeys(fields) {
+		if field == "id" {
 			continue
 		}
-		entries = append(entries, a.entry(table, id, k, "update", fields[k]))
+		entries = append(entries, a.entry(table, id, field, "update", fields[field]))
 	}
 	if len(entries) == 0 {
 		return nil
@@ -183,9 +183,9 @@ func (a *API) SetFieldNull(table, id, field string) error {
 		return err
 	}
 	audit := a.audit(table, id, "update", map[string]string{field: ""})
-	e := a.entry(table, id, field, "update", "")
-	e.IsNull = true
-	return a.commit(append([]txlog.Entry{e}, audit...))
+	entry := a.entry(table, id, field, "update", "")
+	entry.IsNull = true
+	return a.commit(append([]txlog.Entry{entry}, audit...))
 }
 
 // MarkDelete soft-deletes a row (is_deleted=1); it stays for the audit/GC window.
@@ -209,11 +209,11 @@ func (a *API) Delete(table, id string) error {
 // Get returns one row (including system columns) keyed by column name, or
 // ok=false if absent. Soft-deleted rows are still returned - callers filter.
 func (a *API) Get(table, id string) (map[string]string, bool, error) {
-	idb, err := hex.DecodeString(id)
+	idBytes, err := hex.DecodeString(id)
 	if err != nil {
 		return nil, false, fmt.Errorf("crud: bad id %q: %w", id, err)
 	}
-	rows, err := a.st.DB().Query(`SELECT * FROM `+quoteIdent(table)+` WHERE "id"=?`, idb)
+	rows, err := a.st.DB().Query(`SELECT * FROM `+quoteIdent(table)+` WHERE "id"=?`, idBytes)
 	if err != nil {
 		return nil, false, err
 	}
@@ -315,14 +315,14 @@ const tsLayout = "2006-01-02T15:04:05.000000000Z"
 func (a *API) now() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	t := time.Now().UTC().Format(tsLayout)
-	if t <= a.lastDate {
+	stamp := time.Now().UTC().Format(tsLayout)
+	if stamp <= a.lastDate {
 		if prev, err := time.Parse(tsLayout, a.lastDate); err == nil {
-			t = prev.Add(time.Nanosecond).UTC().Format(tsLayout)
+			stamp = prev.Add(time.Nanosecond).UTC().Format(tsLayout)
 		}
 	}
-	a.lastDate = t
-	return t
+	a.lastDate = stamp
+	return stamp
 }
 
 func sortedKeys(m map[string]string) []string {
@@ -349,11 +349,11 @@ func rowsToMaps(rows *sql.Rows) ([]map[string]string, error) {
 		if err := rows.Scan(ptrs...); err != nil {
 			return nil, err
 		}
-		m := make(map[string]string, len(cols))
+		row := make(map[string]string, len(cols))
 		for i, c := range cols {
-			m[c] = valToString(c, vals[i])
+			row[c] = valToString(c, vals[i])
 		}
-		out = append(out, m)
+		out = append(out, row)
 	}
 	return out, rows.Err()
 }

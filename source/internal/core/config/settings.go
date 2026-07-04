@@ -34,22 +34,22 @@ func settingsPath() (string, error) {
 // errors, so callers can use the result directly.
 func LoadSettings() *Settings {
 	s := &Settings{}
-	if p, err := settingsPath(); err == nil {
-		_, _ = toml.DecodeFile(p, s)
+	if path, err := settingsPath(); err == nil {
+		_, _ = toml.DecodeFile(path, s)
 	}
 	return s
 }
 
 // Save writes the global settings, creating the registry root if needed.
 func (s *Settings) Save() error {
-	p, err := settingsPath()
+	path, err := settingsPath()
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	f, err := os.Create(p)
+	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}

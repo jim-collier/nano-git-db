@@ -62,32 +62,32 @@ func (s *Store) DB() *sql.DB { return s.db }
 // still need a rebuild-from-log). Relationship-driven indexes and the auto
 // feature tables (m:m, comments, audit, ...) are handled separately.
 func (s *Store) Build(schema *ddl.Schema) error {
-	for _, t := range schema.Tables {
-		if err := s.buildTable(t); err != nil {
-			return fmt.Errorf("table %q: %w", t.Name, err)
+	for _, table := range schema.Tables {
+		if err := s.buildTable(table); err != nil {
+			return fmt.Errorf("table %q: %w", table.Name, err)
 		}
 	}
 	return nil
 }
 
-func (s *Store) buildTable(t ddl.Table) error {
-	stmts := []string{createTableSQL(t)}
-	existing, err := s.columns(t.Name)
+func (s *Store) buildTable(table ddl.Table) error {
+	stmts := []string{createTableSQL(table)}
+	existing, err := s.columns(table.Name)
 	if err != nil {
 		return err
 	}
 	if existing != nil { // table already there - add whatever the DDL grew
-		for _, f := range t.Fields {
+		for _, f := range table.Fields {
 			if !existing[f.Name] {
-				stmts = append(stmts, "ALTER TABLE "+quoteIdent(t.Name)+
+				stmts = append(stmts, "ALTER TABLE "+quoteIdent(table.Name)+
 					" ADD COLUMN "+columnDef(f, true)+";")
 			}
 		}
 	}
-	stmts = append(stmts, indexStatements(t)...)
-	for _, q := range stmts {
-		if _, err := s.db.Exec(q); err != nil {
-			return fmt.Errorf("%w\n%s", err, q)
+	stmts = append(stmts, indexStatements(table)...)
+	for _, stmt := range stmts {
+		if _, err := s.db.Exec(stmt); err != nil {
+			return fmt.Errorf("%w\n%s", err, stmt)
 		}
 	}
 	return nil
@@ -114,13 +114,13 @@ func (s *Store) columns(table string) (map[string]bool, error) {
 	return out, rows.Err()
 }
 
-func createTableSQL(t ddl.Table) string {
+func createTableSQL(table ddl.Table) string {
 	cols := []string{`"id" BLOB PRIMARY KEY`}
-	for _, f := range t.Fields {
+	for _, f := range table.Fields {
 		cols = append(cols, columnDef(f, false))
 	}
 	// system_fields: no (built-in audit_trail) keeps id but skips the rest.
-	if !t.NoSystemFields {
+	if !table.NoSystemFields {
 		cols = append(cols,
 			`"is_active" INTEGER NOT NULL DEFAULT 1`,
 			`"date_created" TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
@@ -128,27 +128,27 @@ func createTableSQL(t ddl.Table) string {
 		)
 	}
 	return fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n\t%s\n);",
-		quoteIdent(t.Name), strings.Join(cols, ",\n\t"))
+		quoteIdent(table.Name), strings.Join(cols, ",\n\t"))
 }
 
-func indexStatements(t ddl.Table) []string {
+func indexStatements(table ddl.Table) []string {
 	var stmts []string
-	for _, grp := range t.Uniques {
-		if len(grp) == 0 {
+	for _, group := range table.Uniques {
+		if len(group) == 0 {
 			continue
 		}
 		// Uniques used to fold is_deleted into the key, which capped each
 		// natural key at ONE soft-deleted row; drop that shape if present.
-		legacy := "ux_" + t.Name + "__" + strings.Join(grp, "_") + "_is_deleted"
+		legacy := "ux_" + table.Name + "__" + strings.Join(group, "_") + "_is_deleted"
 		stmts = append(stmts,
 			"DROP INDEX IF EXISTS "+quoteIdent(legacy)+";",
-			indexSQL(t.Name, grp, true, !t.NoSystemFields))
+			indexSQL(table.Name, group, true, !table.NoSystemFields))
 	}
-	for _, grp := range t.Indexes {
-		if len(grp) == 0 {
+	for _, group := range table.Indexes {
+		if len(group) == 0 {
 			continue
 		}
-		stmts = append(stmts, indexSQL(t.Name, grp, false, false))
+		stmts = append(stmts, indexSQL(table.Name, group, false, false))
 	}
 	return stmts
 }
@@ -156,14 +156,14 @@ func indexStatements(t ddl.Table) []string {
 // columnDef renders one column. forAlter drops NOT NULL when there is no
 // default: SQLite refuses ADD COLUMN NOT NULL without a non-null default, and
 // existing rows need a value anyway.
-func columnDef(f ddl.Field, forAlter bool) string {
+func columnDef(field ddl.Field, forAlter bool) string {
 	var b strings.Builder
-	b.WriteString(quoteIdent(f.Name))
+	b.WriteString(quoteIdent(field.Name))
 	b.WriteByte(' ')
-	b.WriteString(sqlType(f.Type))
-	def, hasDef := defaultLiteral(f)
+	b.WriteString(sqlType(field.Type))
+	def, hasDef := defaultLiteral(field)
 	// null_ok defaults true, so only an explicit "no" makes a column NOT NULL.
-	if f.NullOK != nil && !*f.NullOK && (!forAlter || hasDef) {
+	if field.NullOK != nil && !*field.NullOK && (!forAlter || hasDef) {
 		b.WriteString(" NOT NULL")
 	}
 	if hasDef {
@@ -173,8 +173,8 @@ func columnDef(f ddl.Field, forAlter bool) string {
 	return b.String()
 }
 
-func sqlType(t string) string {
-	switch t {
+func sqlType(typ string) string {
+	switch typ {
 	case "int", "bool":
 		return "INTEGER"
 	case "float":
@@ -189,32 +189,32 @@ func sqlType(t string) string {
 // defaultLiteral renders a field's DDL default as a SQL literal. NULL and
 // function refs are skipped: NULL is the column default anyway, and functions
 // are computed by the app, not by SQLite.
-func defaultLiteral(f ddl.Field) (string, bool) {
-	d := strings.TrimSpace(f.Default)
-	if d == "" || ddl.IsNull(d) {
+func defaultLiteral(field ddl.Field) (string, bool) {
+	def := strings.TrimSpace(field.Default)
+	if def == "" || ddl.IsNull(def) {
 		return "", false
 	}
-	if _, _, ok := ddl.AsFunc(d); ok {
+	if _, _, ok := ddl.AsFunc(def); ok {
 		return "", false
 	}
-	switch f.Type {
+	switch field.Type {
 	case "bool":
-		if b, ok := ddl.AsBool(d); ok {
+		if b, ok := ddl.AsBool(def); ok {
 			if b {
 				return "1", true
 			}
 			return "0", true
 		}
 	case "int":
-		if i, ok := ddl.AsInt(d); ok {
+		if i, ok := ddl.AsInt(def); ok {
 			return strconv.Itoa(i), true
 		}
 	case "float":
-		if n, ok := ddl.AsFloat(d); ok {
+		if n, ok := ddl.AsFloat(def); ok {
 			return strconv.FormatFloat(n, 'g', -1, 64), true
 		}
 	default:
-		s, _ := ddl.Unquote(d)
+		s, _ := ddl.Unquote(def)
 		return "'" + strings.ReplaceAll(s, "'", "''") + "'", true
 	}
 	return "", false

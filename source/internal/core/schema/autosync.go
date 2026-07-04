@@ -26,24 +26,24 @@ func (c *Client) StartAutoSync(freq int, onWarn func(string)) func() {
 	if onWarn == nil {
 		onWarn = func(string) {}
 	}
-	sy := txlog.NewSyncer(c.log, time.Duration(freq)*time.Second)
-	sy.OnChange = func() error {
-		entries, rw, err := c.log.ReadAll()
+	syncer := txlog.NewSyncer(c.log, time.Duration(freq)*time.Second)
+	syncer.OnChange = func() error {
+		entries, readWarns, err := c.log.ReadAll()
 		if err != nil {
 			return err
 		}
-		bs, err := Builtins()
+		builtins, err := Builtins()
 		if err != nil {
 			return err
 		}
-		ApplyAliases(entries, c.Schema, bs)
-		aw, err := txlog.Apply(c.Store, entries)
-		for _, w := range append(rw, aw...) {
-			onWarn(w)
+		ApplyAliases(entries, c.Schema, builtins)
+		applyWarns, err := txlog.Apply(c.Store, entries)
+		for _, warn := range append(readWarns, applyWarns...) {
+			onWarn(warn)
 		}
 		return err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	go sy.Run(ctx, func(err error) { onWarn(fmt.Sprintf("sync: %v", err)) })
+	go syncer.Run(ctx, func(err error) { onWarn(fmt.Sprintf("sync: %v", err)) })
 	return cancel
 }

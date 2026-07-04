@@ -22,9 +22,9 @@ type Node struct {
 
 // child returns the first child with the given key, or nil.
 func (n *Node) child(key string) *Node {
-	for _, c := range n.Children {
-		if c.Key == key {
-			return c
+	for _, child := range n.Children {
+		if child.Key == key {
+			return child
 		}
 	}
 	return nil
@@ -33,9 +33,9 @@ func (n *Node) child(key string) *Node {
 // all returns every child with the given key, in order.
 func (n *Node) all(key string) []*Node {
 	var out []*Node
-	for _, c := range n.Children {
-		if c.Key == key {
-			out = append(out, c)
+	for _, child := range n.Children {
+		if child.Key == key {
+			out = append(out, child)
 		}
 	}
 	return out
@@ -44,9 +44,9 @@ func (n *Node) all(key string) []*Node {
 // items returns the bare list-item children (uniques/indexes rows).
 func (n *Node) items() []*Node {
 	var out []*Node
-	for _, c := range n.Children {
-		if c.List {
-			out = append(out, c)
+	for _, child := range n.Children {
+		if child.List {
+			out = append(out, child)
 		}
 	}
 	return out
@@ -82,9 +82,9 @@ func buildTree(src []byte) (*Node, []string, error) {
 				"line %d: unclosed quote swallows a '#'; it is treated as content, not a comment", lineNo))
 		}
 
-		ind := stripped[:len(stripped)-len(strings.TrimLeft(stripped, " \t"))]
-		for j := 0; j < len(ind); j++ {
-			c := ind[j]
+		indent := stripped[:len(stripped)-len(strings.TrimLeft(stripped, " \t"))]
+		for j := 0; j < len(indent); j++ {
+			c := indent[j]
 			if indentChar == 0 {
 				indentChar = c
 			}
@@ -92,7 +92,7 @@ func buildTree(src []byte) (*Node, []string, error) {
 				return nil, warns, fmt.Errorf("line %d: inconsistent indentation (mixed tabs and spaces)", lineNo)
 			}
 		}
-		width := len(ind)
+		width := len(indent)
 		if width > 0 {
 			if step == 0 {
 				step = width
@@ -108,10 +108,10 @@ func buildTree(src []byte) (*Node, []string, error) {
 		parent := stack[len(stack)-1].n
 
 		node := &Node{Line: lineNo}
-		if p := findColon(content); p >= 0 {
-			if key := strings.TrimSpace(content[:p]); isPathKey(key) {
+		if colon := findColon(content); colon >= 0 {
+			if key := strings.TrimSpace(content[:colon]); isPathKey(key) {
 				node.Key = key
-				node.Value = strings.TrimSpace(content[p+1:])
+				node.Value = strings.TrimSpace(content[colon+1:])
 			}
 		}
 		if node.Key == "" {
@@ -129,14 +129,14 @@ func buildTree(src []byte) (*Node, []string, error) {
 // single-quote, and backtick spans. hiddenHash reports a '#' inside a quote
 // span that never closed - typically a stray apostrophe eating a real comment.
 func stripComment(line string) (out string, hiddenHash bool) {
-	var q byte
+	var quote byte
 	var sawHash bool
 	for i := 0; i < len(line); i++ {
 		c := line[i]
-		if q != 0 {
+		if quote != 0 {
 			switch c {
-			case q:
-				q = 0
+			case quote:
+				quote = 0
 			case '#':
 				sawHash = true
 			}
@@ -144,28 +144,28 @@ func stripComment(line string) (out string, hiddenHash bool) {
 		}
 		switch c {
 		case '"', '\'', '`':
-			q = c
+			quote = c
 		case '#':
 			return line[:i], false
 		}
 	}
-	return line, q != 0 && sawHash
+	return line, quote != 0 && sawHash
 }
 
 // findColon returns the index of the first unquoted ':' , or -1.
 func findColon(s string) int {
-	var q byte
+	var quote byte
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if q != 0 {
-			if c == q {
-				q = 0
+		if quote != 0 {
+			if c == quote {
+				quote = 0
 			}
 			continue
 		}
 		switch c {
 		case '"', '\'', '`':
-			q = c
+			quote = c
 		case ':':
 			return i
 		}
@@ -180,48 +180,48 @@ func findColon(s string) int {
 // archaeology; a scalar redefined to a different value is still almost surely
 // a mistake, so the first value wins with a warning.
 func normalize(n *Node, warns *[]string) {
-	for i, c := range n.Children {
-		if strings.Contains(c.Key, "/") {
-			n.Children[i] = expandPath(c)
+	for i, child := range n.Children {
+		if strings.Contains(child.Key, "/") {
+			n.Children[i] = expandPath(child)
 		}
 	}
 	byKey := map[string]*Node{}
 	out := n.Children[:0]
-	for _, c := range n.Children {
-		if c.Key == "" || repeatable[c.Key] {
-			out = append(out, c)
+	for _, child := range n.Children {
+		if child.Key == "" || repeatable[child.Key] {
+			out = append(out, child)
 			continue
 		}
-		first, dup := byKey[c.Key]
+		first, dup := byKey[child.Key]
 		if !dup {
-			byKey[c.Key] = c
-			out = append(out, c)
+			byKey[child.Key] = child
+			out = append(out, child)
 			continue
 		}
-		if c.Value != "" {
+		if child.Value != "" {
 			if first.Value == "" {
-				first.Value = c.Value
-			} else if first.Value != c.Value {
+				first.Value = child.Value
+			} else if first.Value != child.Value {
 				*warns = append(*warns, fmt.Sprintf(
-					"line %d: duplicate key %q (line %d already set it); the first value wins", c.Line, c.Key, first.Line))
+					"line %d: duplicate key %q (line %d already set it); the first value wins", child.Line, child.Key, first.Line))
 			}
 		}
-		first.Children = append(first.Children, c.Children...)
+		first.Children = append(first.Children, child.Children...)
 	}
 	n.Children = out
-	for _, c := range n.Children {
-		normalize(c, warns)
+	for _, child := range n.Children {
+		normalize(child, warns)
 	}
 }
 
 // expandPath turns a "database/relationships:" shorthand node into the nested
 // chain it abbreviates; the original node becomes the innermost link.
-func expandPath(c *Node) *Node {
-	segs := strings.Split(c.Key, "/")
-	c.Key = segs[len(segs)-1]
-	node := c
-	for i := len(segs) - 2; i >= 0; i-- {
-		node = &Node{Key: segs[i], Line: c.Line, Children: []*Node{node}}
+func expandPath(leaf *Node) *Node {
+	segments := strings.Split(leaf.Key, "/")
+	leaf.Key = segments[len(segments)-1]
+	node := leaf
+	for i := len(segments) - 2; i >= 0; i-- {
+		node = &Node{Key: segments[i], Line: leaf.Line, Children: []*Node{node}}
 	}
 	return node
 }

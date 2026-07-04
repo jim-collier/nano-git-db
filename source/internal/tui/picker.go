@@ -125,12 +125,12 @@ func (p *picker) setStatus(msg string) { p.status.SetText(" " + msg) }
 // moveSelection advances the highlight by dir (+1/-1), skipping spacer rows and
 // stopping at the ends rather than wrapping.
 func (p *picker) moveSelection(dir int) {
-	n := p.list.GetItemCount()
+	count := p.list.GetItemCount()
 	i := p.list.GetCurrentItem() + dir
-	for i >= 0 && i < n && p.actions[i] == nil {
+	for i >= 0 && i < count && p.actions[i] == nil {
 		i += dir
 	}
-	if i >= 0 && i < n {
+	if i >= 0 && i < count {
 		p.list.SetCurrentItem(i)
 	}
 }
@@ -151,37 +151,37 @@ func (p *picker) populate() {
 	}
 	var entries []entry
 	for i := range p.listed {
-		l := &p.listed[i]
-		main := l.Name
-		sub := l.Dir
-		if l.System {
+		listed := &p.listed[i]
+		main := listed.Name
+		sub := listed.Dir
+		if listed.System {
 			main += "  (system)"
 		}
-		if l.Err != nil {
+		if listed.Err != nil {
 			main = "[!] " + main
-			sub = l.Err.Error()
+			sub = listed.Err.Error()
 		}
-		ll := *l
+		chosen := *listed
 		// A record is removable only when it loaded and is not a read-only
 		// system record; a broken ([!]) user record still is - that's the point.
 		var rec *config.Listed
-		if l.Config != nil && !l.System {
-			rec = l
+		if listed.Config != nil && !listed.System {
+			rec = listed
 		}
-		entries = append(entries, entry{main, sub, func() { p.chooseListed(ll) }, rec})
+		entries = append(entries, entry{main, sub, func() { p.chooseListed(chosen) }, rec})
 	}
 	entries = append(entries,
 		entry{"Create new database", "register a new database and open it", p.createForm, nil},
 		entry{"Open existing ...", "open a DDL + tx-log without registering", p.openForm, nil})
-	for i, e := range entries {
+	for i, ent := range entries {
 		if i > 0 {
 			p.list.AddItem("", "", 0, nil)
 			p.actions = append(p.actions, nil)
 			p.rowDB = append(p.rowDB, nil)
 		}
-		p.list.AddItem(e.main, e.sub, 0, nil)
-		p.actions = append(p.actions, e.act)
-		p.rowDB = append(p.rowDB, e.db)
+		p.list.AddItem(ent.main, ent.sub, 0, nil)
+		p.actions = append(p.actions, ent.act)
+		p.rowDB = append(p.rowDB, ent.db)
 	}
 }
 
@@ -236,14 +236,14 @@ func (p *picker) confirmDeleteFiles(cfg *config.DBConfig) {
 // modal shows a confirm dialog; the first button is the default. It closes
 // itself and refocuses the list before calling fn, so fn may open a follow-up.
 func (p *picker) modal(name, msg string, buttons []string, fn func(label string)) {
-	m := tview.NewModal().SetText(msg).AddButtons(buttons).
+	dialog := tview.NewModal().SetText(msg).AddButtons(buttons).
 		SetDoneFunc(func(_ int, label string) {
 			p.pages.RemovePage(name)
 			p.app.SetFocus(p.list)
 			fn(label)
 		})
-	p.pages.AddPage(name, m, true, true)
-	p.app.SetFocus(m)
+	p.pages.AddPage(name, dialog, true, true)
+	p.app.SetFocus(dialog)
 }
 
 // refresh re-reads the registry and rebuilds the list after a change.
@@ -254,22 +254,22 @@ func (p *picker) refresh(status string) {
 }
 
 // chooseListed opens a registered database, or reports why it can't open.
-func (p *picker) chooseListed(l config.Listed) {
-	if l.Err != nil {
-		p.setStatus("cannot open " + l.Name + ": " + l.Err.Error())
+func (p *picker) chooseListed(listed config.Listed) {
+	if listed.Err != nil {
+		p.setStatus("cannot open " + listed.Name + ": " + listed.Err.Error())
 		return
 	}
 	p.finish(&pickResult{
-		ddlPath:    l.Config.DDLPath,
-		sqlitePath: l.Config.SQLitePath,
-		logDir:     l.Config.LogDir,
-		cfg:        l.Config,
+		ddlPath:    listed.Config.DDLPath,
+		sqlitePath: listed.Config.SQLitePath,
+		logDir:     listed.Config.LogDir,
+		cfg:        listed.Config,
 	})
 }
 
 // finish records the result and ends the picker so the caller can open it.
-func (p *picker) finish(r *pickResult) {
-	p.result = r
+func (p *picker) finish(result *pickResult) {
+	p.result = result
 	p.app.Stop()
 }
 

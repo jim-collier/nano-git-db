@@ -50,8 +50,8 @@ func UserBase() (string, error) {
 // discovery just skips them.
 func SystemBases() []string {
 	if runtime.GOOS == "windows" {
-		if pd := os.Getenv("ProgramData"); pd != "" {
-			return []string{filepath.Join(pd, appDir)}
+		if programData := os.Getenv("ProgramData"); programData != "" {
+			return []string{filepath.Join(programData, appDir)}
 		}
 		return nil
 	}
@@ -60,9 +60,9 @@ func SystemBases() []string {
 		dirs = "/etc/xdg"
 	}
 	var out []string
-	for _, d := range strings.Split(dirs, string(os.PathListSeparator)) {
-		if d != "" {
-			out = append(out, filepath.Join(d, appDir))
+	for _, dir := range strings.Split(dirs, string(os.PathListSeparator)) {
+		if dir != "" {
+			out = append(out, filepath.Join(dir, appDir))
 		}
 	}
 	return out

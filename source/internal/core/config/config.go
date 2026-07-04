@@ -52,16 +52,16 @@ func (c *DBConfig) applyDefaults() {
 // Load reads <dir>/config.toml and fills defaults. A missing or malformed file
 // is an error the caller reports (discovery marks such a record unopenable).
 func Load(dir string) (*DBConfig, error) {
-	var c DBConfig
-	if _, err := toml.DecodeFile(filepath.Join(dir, recordFile), &c); err != nil {
+	var cfg DBConfig
+	if _, err := toml.DecodeFile(filepath.Join(dir, recordFile), &cfg); err != nil {
 		return nil, err
 	}
-	c.dir = dir
-	if c.Name == "" {
-		c.Name = filepath.Base(dir) // a nameless record falls back to its dir
+	cfg.dir = dir
+	if cfg.Name == "" {
+		cfg.Name = filepath.Base(dir) // a nameless record falls back to its dir
 	}
-	c.applyDefaults()
-	return &c, nil
+	cfg.applyDefaults()
+	return &cfg, nil
 }
 
 // Save writes the record back to <dir>/config.toml, creating the directory.
@@ -102,27 +102,27 @@ func Create(name, ddlPath, logDir string) (*DBConfig, error) {
 	if _, err := os.Stat(filepath.Join(dir, recordFile)); err == nil {
 		return nil, fmt.Errorf("config: database %q already registered at %s", name, dir)
 	}
-	c := &DBConfig{
+	cfg := &DBConfig{
 		Name:    name,
 		DDLPath: absPath(ddlPath),
 		LogDir:  absPath(logDir),
 		dir:     dir,
 	}
-	c.applyDefaults()
-	if err := c.Save(); err != nil {
+	cfg.applyDefaults()
+	if err := cfg.Save(); err != nil {
 		return nil, err
 	}
-	return c, nil
+	return cfg, nil
 }
 
 // absPath makes a path absolute without failing: a bad cwd just leaves it as
 // given, which discovery will later flag as unopenable.
-func absPath(p string) string {
-	if p == "" {
+func absPath(path string) string {
+	if path == "" {
 		return ""
 	}
-	if abs, err := filepath.Abs(p); err == nil {
+	if abs, err := filepath.Abs(path); err == nil {
 		return abs
 	}
-	return p
+	return path
 }

@@ -19,14 +19,14 @@ import (
 // tx-log path itself.
 func LogDirFor(location, name string) (string, error) {
 	if location != "" {
-		p, err := filepath.Abs(location)
+		path, err := filepath.Abs(location)
 		if err != nil {
 			return "", err
 		}
-		if root, ok := txlog.RepoRoot(p); ok && sameDir(root, p) {
+		if root, ok := txlog.RepoRoot(path); ok && sameDir(root, path) {
 			return filepath.Join(root, "ngdb", name), nil
 		}
-		return p, nil
+		return path, nil
 	}
 	wd, err := os.Getwd()
 	if err != nil {

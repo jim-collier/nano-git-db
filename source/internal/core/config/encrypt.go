@@ -27,8 +27,8 @@ func ResolveEncryption(ddlPath string, cfg *DBConfig) (keyFile, pref string) {
 	} else {
 		keyFile, pref = LocalKey(ddlPath), "auto"
 	}
-	if o := EncryptPref(); o != "" {
-		pref = o
+	if override := EncryptPref(); override != "" {
+		pref = override
 	}
 	if pref == "" {
 		pref = "auto"

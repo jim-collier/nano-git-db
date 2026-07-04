@@ -33,11 +33,11 @@ func Init(args []string) error {
 	}
 	name := dbName(ddlPath)
 
-	var arg string
+	var location string
 	if len(args) > 0 {
-		arg = args[0]
+		location = args[0]
 	}
-	logDir, err := config.LogDirFor(arg, name)
+	logDir, err := config.LogDirFor(location, name)
 	if err != nil {
 		return err
 	}

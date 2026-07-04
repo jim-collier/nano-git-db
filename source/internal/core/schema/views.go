@@ -48,21 +48,21 @@ type ViewSpec struct {
 func (c *Catalog) resolveViews(schemas ...*ddl.Schema) {
 	seen := map[string]bool{}
 	for _, s := range schemas {
-		for _, v := range s.Views {
-			if v.Name == "" || seen[v.Name] {
-				if v.Name != "" {
-					c.warnf("view %q: duplicate name, keeping the first", v.Name)
+		for _, view := range s.Views {
+			if view.Name == "" || seen[view.Name] {
+				if view.Name != "" {
+					c.warnf("view %q: duplicate name, keeping the first", view.Name)
 				}
 				continue
 			}
-			seen[v.Name] = true
-			spec := ViewSpec{Name: v.Name, StartupNamedQuery: v.StartupNamedQuery, Access: v.Access}
-			ro := v.Readonly != nil && *v.Readonly
-			if len(v.Layout) > 0 {
-				spec.Root = c.resolveBlock(v.Name, ddl.Block{Children: v.Layout}, ro, &spec.Leaves)
+			seen[view.Name] = true
+			spec := ViewSpec{Name: view.Name, StartupNamedQuery: view.StartupNamedQuery, Access: view.Access}
+			readonly := view.Readonly != nil && *view.Readonly
+			if len(view.Layout) > 0 {
+				spec.Root = c.resolveBlock(view.Name, ddl.Block{Children: view.Layout}, readonly, &spec.Leaves)
 			}
 			if len(spec.Leaves) == 0 {
-				c.warnf("view %q: no renderable blocks, dropped", v.Name)
+				c.warnf("view %q: no renderable blocks, dropped", view.Name)
 				continue
 			}
 			c.Views = append(c.Views, spec)
@@ -105,60 +105,60 @@ func (c *Catalog) warnf(format string, args ...any) {
 	c.Warnings = append(c.Warnings, fmt.Sprintf(format, args...))
 }
 
-func (c *Catalog) resolveBlock(view string, b ddl.Block, inheritRO bool, leaves *[]*ViewBlock) *ViewBlock {
-	ro := inheritRO
-	if b.Readonly != nil {
-		ro = *b.Readonly
+func (c *Catalog) resolveBlock(view string, block ddl.Block, inheritRO bool, leaves *[]*ViewBlock) *ViewBlock {
+	readonly := inheritRO
+	if block.Readonly != nil {
+		readonly = *block.Readonly
 	}
-	rb := &ViewBlock{Name: b.Name, Readonly: ro}
-	rb.Percent = locPercent(b.Location)
+	resolved := &ViewBlock{Name: block.Name, Readonly: readonly}
+	resolved.Percent = locPercent(block.Location)
 
-	if len(b.Children) > 0 { // container: a table here would be ambiguous
-		if b.Table != "" {
-			c.warnf("view %q block %q: has child blocks, ignoring its table", view, b.Name)
+	if len(block.Children) > 0 { // container: a table here would be ambiguous
+		if block.Table != "" {
+			c.warnf("view %q block %q: has child blocks, ignoring its table", view, block.Name)
 		}
 		// The first positioned child decides the split axis.
-		rb.Dir = "row"
-		for _, ch := range b.Children {
-			if d := locDir(ch.Location); d != "" {
-				rb.Dir = d
+		resolved.Dir = "row"
+		for _, child := range block.Children {
+			if dir := locDir(child.Location); dir != "" {
+				resolved.Dir = dir
 				break
 			}
 		}
-		for _, ch := range b.Children {
-			if rc := c.resolveBlock(view, ch, ro, leaves); rc != nil {
-				rb.Children = append(rb.Children, rc)
+		for _, child := range block.Children {
+			if resolvedChild := c.resolveBlock(view, child, readonly, leaves); resolvedChild != nil {
+				resolved.Children = append(resolved.Children, resolvedChild)
 			}
 		}
-		if len(rb.Children) == 0 {
+		if len(resolved.Children) == 0 {
 			return nil
 		}
-		return rb
+		return resolved
 	}
 
-	if b.Table == "" || !c.Has(b.Table) {
-		c.warnf("view %q block %q: unknown table %q, dropped", view, b.Name, b.Table)
+	if block.Table == "" || !c.Has(block.Table) {
+		c.warnf("view %q block %q: unknown table %q, dropped", view, block.Name, block.Table)
 		return nil
 	}
-	rb.Table = b.Table
-	rb.Type = b.Type
-	switch b.Type {
+	resolved.Table = block.Table
+	resolved.Type = block.Type
+	switch block.Type {
 	case "", "grid":
-		rb.Type = "grid"
+		resolved.Type = "grid"
 	case "form":
 	case "tree_grid":
-		rb.ParentField = b.ParentField
-		if !fieldOf(c.Fields[b.Table], b.ParentField) {
+		resolved.ParentField = block.ParentField
+		if !fieldOf(c.Fields[block.Table], block.ParentField) {
 			c.warnf("view %q block %q: tree_grid parent_field %q is not a field of %q, rendering as grid",
-				view, b.Name, b.ParentField, b.Table)
-			rb.Type, rb.ParentField = "grid", ""
+				view, block.Name, block.ParentField, block.Table)
+			resolved.Type, resolved.ParentField = "grid", ""
 		}
 	default:
-		c.warnf("view %q block %q: unknown type %q, rendering as grid", view, b.Name, b.Type)
-		rb.Type = "grid"
+		c.warnf("view %q block %q: unknown type %q, rendering as grid", view, block.Name, block.Type)
+		resolved.Type = "grid"
 	}
-	*leaves = append(*leaves, rb)
-	return rb
+	*leaves = append(*leaves, resolved)
+	return resolved
 }
 
 func fieldOf(fields []string, name string) bool {
@@ -173,9 +173,9 @@ func fieldOf(fields []string, name string) bool {
 // locDir maps a location hint's direction word to a split axis. v0 places
 // blocks in DDL order, so only the axis and percent of the hint are used;
 // the relative-to element is ignored.
-func locDir(loc []string) string {
-	for _, p := range loc {
-		switch strings.ToLower(strings.TrimSpace(p)) {
+func locDir(location []string) string {
+	for _, part := range location {
+		switch strings.ToLower(strings.TrimSpace(part)) {
 		case "left", "right":
 			return "col"
 		case "above", "below":
@@ -185,12 +185,12 @@ func locDir(loc []string) string {
 	return ""
 }
 
-func locPercent(loc []string) int {
-	for _, p := range loc {
-		p = strings.TrimSpace(p)
-		if n, ok := strings.CutSuffix(p, "%"); ok {
-			if v, err := strconv.Atoi(strings.TrimSpace(n)); err == nil && v >= 1 && v <= 99 {
-				return v
+func locPercent(location []string) int {
+	for _, part := range location {
+		part = strings.TrimSpace(part)
+		if numStr, ok := strings.CutSuffix(part, "%"); ok {
+			if pct, err := strconv.Atoi(strings.TrimSpace(numStr)); err == nil && pct >= 1 && pct <= 99 {
+				return pct
 			}
 		}
 	}
@@ -201,18 +201,18 @@ func locPercent(loc []string) int {
 // to 100: hinted children keep their percent, the rest split the remainder.
 func (b *ViewBlock) Proportions() []int {
 	out := make([]int, len(b.Children))
-	left, loose := 100, 0
-	for i, ch := range b.Children {
-		if ch.Percent > 0 {
-			out[i] = ch.Percent
-			left -= ch.Percent
+	left, unhinted := 100, 0
+	for i, child := range b.Children {
+		if child.Percent > 0 {
+			out[i] = child.Percent
+			left -= child.Percent
 		} else {
-			loose++
+			unhinted++
 		}
 	}
 	for i := range out {
 		if out[i] == 0 {
-			out[i] = max(1, left/max(1, loose))
+			out[i] = max(1, left/max(1, unhinted))
 		}
 	}
 	return out
@@ -244,11 +244,11 @@ func (c *Catalog) TreeRows(api *crud.API, table, parentField string) ([]TreeRow,
 	kids := map[string][]int{}
 	var roots []int
 	for i, r := range rows {
-		p := r[parentField]
-		if p == "" || !byID[p] || p == r["id"] {
+		parent := r[parentField]
+		if parent == "" || !byID[parent] || parent == r["id"] {
 			roots = append(roots, i)
 		} else {
-			kids[p] = append(kids[p], i)
+			kids[parent] = append(kids[parent], i)
 		}
 	}
 	out := make([]TreeRow, 0, len(rows))
@@ -264,8 +264,8 @@ func (c *Catalog) TreeRows(api *crud.API, table, parentField string) ([]TreeRow,
 			walk(k, depth+1)
 		}
 	}
-	for _, r := range roots {
-		walk(r, 0)
+	for _, root := range roots {
+		walk(root, 0)
 	}
 	for i := range rows {
 		walk(i, 0)

@@ -15,42 +15,42 @@ import (
 // ApplyAliases rewrites entries in place. First definition wins on
 // conflicting aliases, matching every other schema merge in the project.
 func ApplyAliases(entries []txlog.Entry, schemas ...*ddl.Schema) {
-	tbl := map[string]string{}
-	fld := map[string]map[string]string{}
+	tableAliases := map[string]string{}
+	fieldAliases := map[string]map[string]string{}
 	for _, s := range schemas {
-		for _, t := range s.Tables {
-			for _, al := range t.Aliases {
-				if al != "" && tbl[al] == "" {
-					tbl[al] = t.Name
+		for _, table := range s.Tables {
+			for _, alias := range table.Aliases {
+				if alias != "" && tableAliases[alias] == "" {
+					tableAliases[alias] = table.Name
 				}
 			}
-			m := fld[t.Name]
-			for _, f := range t.Fields {
-				for _, al := range f.Aliases {
-					if al == "" {
+			fieldMap := fieldAliases[table.Name]
+			for _, field := range table.Fields {
+				for _, alias := range field.Aliases {
+					if alias == "" {
 						continue
 					}
-					if m == nil {
-						m = map[string]string{}
-						fld[t.Name] = m
+					if fieldMap == nil {
+						fieldMap = map[string]string{}
+						fieldAliases[table.Name] = fieldMap
 					}
-					if m[al] == "" {
-						m[al] = f.Name
+					if fieldMap[alias] == "" {
+						fieldMap[alias] = field.Name
 					}
 				}
 			}
 		}
 	}
-	if len(tbl) == 0 && len(fld) == 0 {
+	if len(tableAliases) == 0 && len(fieldAliases) == 0 {
 		return
 	}
 	for i := range entries {
-		if n := tbl[entries[i].Table]; n != "" {
-			entries[i].Table = n
+		if newName := tableAliases[entries[i].Table]; newName != "" {
+			entries[i].Table = newName
 		}
-		if m := fld[entries[i].Table]; m != nil {
-			if n := m[entries[i].Field]; n != "" {
-				entries[i].Field = n
+		if fieldMap := fieldAliases[entries[i].Table]; fieldMap != nil {
+			if newName := fieldMap[entries[i].Field]; newName != "" {
+				entries[i].Field = newName
 			}
 		}
 	}

@@ -45,11 +45,11 @@ func ParseQueriesFile(path string) ([]NamedQuery, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	qs, warns, err := ParseQueries(b)
+	queries, warns, err := ParseQueries(b)
 	if err != nil {
 		return nil, warns, fmt.Errorf("%s: %w", path, err)
 	}
-	return qs, warns, nil
+	return queries, warns, nil
 }
 
 // ParseQueries parses queries text. Soft problems (nameless, duplicate, no
@@ -64,46 +64,46 @@ func ParseQueries(src []byte) ([]NamedQuery, []string, error) {
 	normalize(root, &warns)
 	var out []NamedQuery
 	seen := map[string]bool{}
-	for _, n := range root.all("query_name") {
-		q := NamedQuery{Active: true, Line: n.Line}
-		q.Name, _ = Unquote(n.Value)
+	for _, queryNode := range root.all("query_name") {
+		q := NamedQuery{Active: true, Line: queryNode.Line}
+		q.Name, _ = Unquote(queryNode.Value)
 		if q.Name == "" {
-			warns = append(warns, fmt.Sprintf("line %d: query with no name, dropped", n.Line))
+			warns = append(warns, fmt.Sprintf("line %d: query with no name, dropped", queryNode.Line))
 			continue
 		}
 		if seen[q.Name] {
 			warns = append(warns, fmt.Sprintf(
-				"line %d: query %q already defined; the first definition wins", n.Line, q.Name))
+				"line %d: query %q already defined; the first definition wins", queryNode.Line, q.Name))
 			continue
 		}
-		for _, c := range n.Children {
-			switch strings.ToLower(c.Key) {
+		for _, child := range queryNode.Children {
+			switch strings.ToLower(child.Key) {
 			case "view":
-				q.View, _ = Unquote(c.Value)
+				q.View, _ = Unquote(child.Value)
 			case "sort":
-				if f, ok := AsFloat(c.Value); ok {
+				if f, ok := AsFloat(child.Value); ok {
 					q.Sort = f
-				} else if c.Value != "" {
+				} else if child.Value != "" {
 					warns = append(warns, fmt.Sprintf(
-						"line %d: query %q sort %q is not a number, ignored", c.Line, q.Name, c.Value))
+						"line %d: query %q sort %q is not a number, ignored", child.Line, q.Name, child.Value))
 				}
 			case "active":
-				if b, ok := AsBool(c.Value); ok {
+				if b, ok := AsBool(child.Value); ok {
 					q.Active = b
 				}
 			case "sql":
-				if s, ok := AsSQL(c.Value); ok {
-					q.SQL = s
+				if sql, ok := AsSQL(child.Value); ok {
+					q.SQL = sql
 				} else {
-					q.SQL, _ = Unquote(strings.TrimSpace(c.Value)) // backticks preferred, but be lenient
+					q.SQL, _ = Unquote(strings.TrimSpace(child.Value)) // backticks preferred, but be lenient
 				}
 			default:
 				warns = append(warns, fmt.Sprintf(
-					"line %d: query %q has unknown key %q (ignored)", c.Line, q.Name, c.Key))
+					"line %d: query %q has unknown key %q (ignored)", child.Line, q.Name, child.Key))
 			}
 		}
 		if q.SQL == "" {
-			warns = append(warns, fmt.Sprintf("line %d: query %q has no SQL, dropped", n.Line, q.Name))
+			warns = append(warns, fmt.Sprintf("line %d: query %q has no SQL, dropped", queryNode.Line, q.Name))
 			continue
 		}
 		seen[q.Name] = true

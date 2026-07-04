@@ -83,11 +83,11 @@ func (a *API) encryptEntries(entries []txlog.Entry) ([]txlog.Entry, error) {
 	out := make([]txlog.Entry, len(entries))
 	copy(out, entries)
 	for i := range out {
-		e := &out[i]
-		if isSystemField(e.Field) || e.IsNull {
+		entry := &out[i]
+		if isSystemField(entry.Field) || entry.IsNull {
 			continue // no value to seal
 		}
-		switch a.decide(e.Table, e.Field) {
+		switch a.decide(entry.Table, entry.Field) {
 		case encClear:
 			continue
 		case encIfKey:
@@ -101,16 +101,16 @@ func (a *API) encryptEntries(entries []txlog.Entry) ([]txlog.Entry, error) {
 		case encAlways:
 			if a.cipher == nil {
 				return nil, fmt.Errorf(
-					"%s.%s requires encryption (encryption: always) but no key is available", e.Table, e.Field)
+					"%s.%s requires encryption (encryption: always) but no key is available", entry.Table, entry.Field)
 			}
 		}
-		tok, err := a.cipher.Seal(
-			enc.Ctx{TxID: e.TxID, Table: e.Table, Field: e.Field, RowID: e.RowID}, e.NewValue)
+		token, err := a.cipher.Seal(
+			enc.Ctx{TxID: entry.TxID, Table: entry.Table, Field: entry.Field, RowID: entry.RowID}, entry.NewValue)
 		if err != nil {
-			return nil, fmt.Errorf("encrypt %s.%s: %w", e.Table, e.Field, err)
+			return nil, fmt.Errorf("encrypt %s.%s: %w", entry.Table, entry.Field, err)
 		}
-		e.NewValue = tok
-		e.Enc = true
+		entry.NewValue = token
+		entry.Enc = true
 	}
 	return out, nil
 }
@@ -123,22 +123,22 @@ func (a *API) encryptEntries(entries []txlog.Entry) ([]txlog.Entry, error) {
 func DecryptEntries(entries []txlog.Entry, cipher enc.Cipher) int {
 	var unreadable int
 	for i := range entries {
-		e := &entries[i]
-		if !e.Enc {
+		entry := &entries[i]
+		if !entry.Enc {
 			continue
 		}
 		if cipher == nil {
 			unreadable++
 			continue
 		}
-		pt, err := cipher.Open(
-			enc.Ctx{TxID: e.TxID, Table: e.Table, Field: e.Field, RowID: e.RowID}, e.NewValue)
+		plaintext, err := cipher.Open(
+			enc.Ctx{TxID: entry.TxID, Table: entry.Table, Field: entry.Field, RowID: entry.RowID}, entry.NewValue)
 		if err != nil {
 			unreadable++
 			continue
 		}
-		e.NewValue = pt
-		e.Enc = false
+		entry.NewValue = plaintext
+		entry.Enc = false
 	}
 	return unreadable
 }

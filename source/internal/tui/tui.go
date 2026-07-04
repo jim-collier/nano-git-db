@@ -43,41 +43,41 @@ func Run(args []string) error {
 // (a registry pick), is stamped with the open time.
 func runOpen(ddlPath, sqlitePath, logDir string, cfg *config.DBConfig) error {
 	keyFile, pref := config.ResolveEncryption(ddlPath, cfg)
-	c, err := schema.OpenClientWith(schema.OpenOpts{
+	client, err := schema.OpenClientWith(schema.OpenOpts{
 		DDLPath: ddlPath, DBPath: sqlitePath, LogDir: logDir, KeyFile: keyFile, EncryptPref: pref,
 	})
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer client.Close()
 	if cfg != nil {
-		if o := config.EncryptPref(); o != "" {
-			cfg.Encryption = o // persist a --encrypt toggle for this host
+		if override := config.EncryptPref(); override != "" {
+			cfg.Encryption = override // persist a --encrypt toggle for this host
 		}
 		_ = cfg.Touch() // best-effort last-opened stamp; open already succeeded
 	}
-	bs, err := schema.Builtins()
+	builtins, err := schema.Builtins()
 	if err != nil {
 		return err
 	}
-	tw, err := script.Attach(c.API, ddlPath, logDir, c.Schema, bs)
+	triggerWarns, err := script.Attach(client.API, ddlPath, logDir, client.Schema, builtins)
 	if err != nil {
 		return err
 	}
-	a, err := NewApp(c.API, c.Schema, bs)
+	app, err := NewApp(client.API, client.Schema, builtins)
 	if err != nil {
 		return err
 	}
-	a.cat.Queries = c.Queries
+	app.cat.Queries = client.Queries
 	// stderr: the alternate screen is about to cover stdout, and these should
 	// survive in the scrollback / a redirect after quit.
-	for _, w := range append(append(c.Warnings, tw...), a.cat.Warnings...) {
+	for _, w := range append(append(client.Warnings, triggerWarns...), app.cat.Warnings...) {
 		fmt.Fprintln(os.Stderr, "warning:", w)
 	}
-	stop := c.StartAutoSync(c.Schema.TunableInt("git_sync_frequency", 60),
+	stop := client.StartAutoSync(client.Schema.TunableInt("git_sync_frequency", 60),
 		func(w string) { fmt.Fprintln(os.Stderr, "warning:", w) })
 	defer stop()
-	return a.Run()
+	return app.Run()
 }
 
 // App is the TUI over one open database.
@@ -148,8 +148,8 @@ func (a *App) buildUI() {
 	for i := range a.cat.Views {
 		a.list.AddItem(a.cat.Views[i].Name+" (view)", "", 0, nil)
 	}
-	for _, t := range a.cat.Tables {
-		a.list.AddItem(t, "", 0, nil)
+	for _, table := range a.cat.Tables {
+		a.list.AddItem(table, "", 0, nil)
 	}
 	a.list.SetSelectedFunc(func(i int, _, _ string, _ rune) {
 		if i < len(a.cat.Views) {
@@ -253,11 +253,11 @@ func (a *App) openTable(table string) {
 	}
 	for r, row := range rows {
 		for c, name := range cols {
-			v := row[name]
-			if name == "id" && len(v) > 8 {
-				v = v[:8]
+			val := row[name]
+			if name == "id" && len(val) > 8 {
+				val = val[:8]
 			}
-			a.grid.SetCell(r+1, c, tview.NewTableCell(v))
+			a.grid.SetCell(r+1, c, tview.NewTableCell(val))
 		}
 	}
 	if len(rows) > 0 {
@@ -280,8 +280,8 @@ func (a *App) editFormThen(table string, row map[string]string, back tview.Primi
 	}
 	form := tview.NewForm()
 	fields := a.cat.Fields[table]
-	for _, f := range fields {
-		form.AddInputField(f, row[f], 0, nil, nil)
+	for _, field := range fields {
+		form.AddInputField(field, row[field], 0, nil, nil)
 	}
 	title := " new " + table + " "
 	if row != nil {
@@ -289,10 +289,10 @@ func (a *App) editFormThen(table string, row map[string]string, back tview.Primi
 	}
 	form.AddButton("Save", func() {
 		vals := map[string]string{}
-		for _, f := range fields {
-			v := form.GetFormItemByLabel(f).(*tview.InputField).GetText()
-			if row == nil || row[f] != v {
-				vals[f] = v
+		for _, field := range fields {
+			val := form.GetFormItemByLabel(field).(*tview.InputField).GetText()
+			if row == nil || row[field] != val {
+				vals[field] = val
 			}
 		}
 		var err error
@@ -346,34 +346,34 @@ func (a *App) extrasPanel() {
 	form := tview.NewForm()
 	rowsShown := 0
 	if feats.Comments {
-		var b strings.Builder
-		cs, err := a.api.CommentsFor(a.cur, row["id"])
+		var sb strings.Builder
+		comments, err := a.api.CommentsFor(a.cur, row["id"])
 		if err != nil {
-			b.WriteString("error: " + err.Error())
+			sb.WriteString("error: " + err.Error())
 		}
-		for _, cm := range cs {
-			fmt.Fprintf(&b, "%s  %s\n", cm["date_created"], cm["comment"])
+		for _, comment := range comments {
+			fmt.Fprintf(&sb, "%s  %s\n", comment["date_created"], comment["comment"])
 		}
-		if b.Len() == 0 {
-			b.WriteString("(none)")
+		if sb.Len() == 0 {
+			sb.WriteString("(none)")
 		}
-		form.AddTextView("comments", b.String(), 0, 5, false, true)
+		form.AddTextView("comments", sb.String(), 0, 5, false, true)
 		form.AddInputField("new comment", "", 0, nil, nil)
 		rowsShown += 7
 	}
 	if feats.URIAttachments || feats.LocalAttachments {
-		var b strings.Builder
-		atts, err := a.api.AttachmentsFor(a.cur, row["id"])
+		var sb strings.Builder
+		attachments, err := a.api.AttachmentsFor(a.cur, row["id"])
 		if err != nil {
-			b.WriteString("error: " + err.Error())
+			sb.WriteString("error: " + err.Error())
 		}
-		for _, at := range atts {
-			fmt.Fprintf(&b, "[%s] %s  %s\n", at.Kind, at.Label, at.Description)
+		for _, attachment := range attachments {
+			fmt.Fprintf(&sb, "[%s] %s  %s\n", attachment.Kind, attachment.Label, attachment.Description)
 		}
-		if b.Len() == 0 {
-			b.WriteString("(none)")
+		if sb.Len() == 0 {
+			sb.WriteString("(none)")
 		}
-		form.AddTextView("attachments", b.String(), 0, 4, false, true)
+		form.AddTextView("attachments", sb.String(), 0, 4, false, true)
 		rowsShown += 5
 	}
 	close := func() {
@@ -475,7 +475,7 @@ func (a *App) deleteSelected(hard bool) {
 }
 
 func (a *App) confirm(msg string, fn func()) {
-	m := tview.NewModal().SetText(msg).AddButtons([]string{"Yes", "No"}).
+	dialog := tview.NewModal().SetText(msg).AddButtons([]string{"Yes", "No"}).
 		SetDoneFunc(func(_ int, label string) {
 			a.pages.RemovePage("confirm")
 			a.app.SetFocus(a.grid)
@@ -483,7 +483,7 @@ func (a *App) confirm(msg string, fn func()) {
 				fn()
 			}
 		})
-	a.pages.AddPage("confirm", m, true, true)
+	a.pages.AddPage("confirm", dialog, true, true)
 }
 
 // modal centers p at a fixed size over the main page.

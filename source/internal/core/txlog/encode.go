@@ -88,29 +88,29 @@ func decodeSym(s string) string {
 	}
 	var b strings.Builder
 	b.Grow(len(s))
-	rs := []rune(s)
-	for i := 0; i < len(rs); i++ {
-		if rs[i] != ldelim {
-			b.WriteRune(rs[i])
+	runes := []rune(s)
+	for i := 0; i < len(runes); i++ {
+		if runes[i] != ldelim {
+			b.WriteRune(runes[i])
 			continue
 		}
 		end := -1
-		for j := i + 1; j < len(rs); j++ {
-			if rs[j] == rdelim {
+		for j := i + 1; j < len(runes); j++ {
+			if runes[j] == rdelim {
 				end = j
 				break
 			}
 		}
 		if end < 0 {
-			b.WriteRune(rs[i])
+			b.WriteRune(runes[i])
 			continue
 		}
-		if r, ok := symChar[string(rs[i+1:end])]; ok {
+		if r, ok := symChar[string(runes[i+1:end])]; ok {
 			b.WriteRune(r)
 			i = end
 			continue
 		}
-		b.WriteRune(rs[i])
+		b.WriteRune(runes[i])
 	}
 	return b.String()
 }

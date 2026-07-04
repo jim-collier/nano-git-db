@@ -22,46 +22,46 @@ func (c *Catalog) applyAccess(api *crud.API, tableAccess map[string]ddl.Access, 
 		// no users/groups tables (bare store): nothing is configured, stay open
 		return
 	}
-	readable := func(t string) bool { return tableAccess[t].AllowedFor("read", groups) }
+	readable := func(table string) bool { return tableAccess[table].AllowedFor("read", groups) }
 
 	kept := c.Tables[:0]
-	for _, t := range c.Tables {
-		if !readable(t) {
-			c.warnf("table %q hidden: read access denied", t)
-			delete(c.Fields, t) // Has() now refuses it, so the front-ends 404
+	for _, table := range c.Tables {
+		if !readable(table) {
+			c.warnf("table %q hidden: read access denied", table)
+			delete(c.Fields, table) // Has() now refuses it, so the front-ends 404
 			continue
 		}
-		kept = append(kept, t)
+		kept = append(kept, table)
 	}
 	c.Tables = kept
 
-	for t, fields := range c.Fields {
-		fk := fields[:0]
-		for _, f := range fields {
-			if ac, ok := fieldAccess[t][f]; ok && !ac.AllowedFor("read", groups) {
+	for table, fields := range c.Fields {
+		keptFields := fields[:0]
+		for _, field := range fields {
+			if access, ok := fieldAccess[table][field]; ok && !access.AllowedFor("read", groups) {
 				continue // silently: a hidden column is not an error
 			}
-			fk = append(fk, f)
+			keptFields = append(keptFields, field)
 		}
-		c.Fields[t] = fk
+		c.Fields[table] = keptFields
 	}
 
 	// A view needs its own flat rule to pass AND read access to its main
 	// (first) table, per the design.
-	vk := c.Views[:0]
+	keptViews := c.Views[:0]
 	for i := range c.Views {
-		v := c.Views[i]
-		open := groups["owners"] || groups["admins"] || v.Access.Allows(groups)
-		if open && len(v.Leaves) > 0 {
-			open = readable(v.Leaves[0].Table)
+		view := c.Views[i]
+		open := groups["owners"] || groups["admins"] || view.Access.Allows(groups)
+		if open && len(view.Leaves) > 0 {
+			open = readable(view.Leaves[0].Table)
 		}
 		if !open {
-			c.warnf("view %q hidden: access denied", v.Name)
+			c.warnf("view %q hidden: access denied", view.Name)
 			continue
 		}
-		vk = append(vk, v)
+		keptViews = append(keptViews, view)
 	}
-	c.Views = vk
+	c.Views = keptViews
 }
 
 // liveRowsAllowed filters a row-level-access table's rows down to the ones
@@ -75,13 +75,13 @@ func (c *Catalog) liveRowsAllowed(api *crud.API, table string, rows []map[string
 	if err != nil || groups["owners"] || groups["admins"] {
 		return rows // hiding is UI-level; the hard gate is crud's
 	}
-	ar, err := api.Query(`SELECT "id","parent_id" FROM "access_rows"
+	accessRows, err := api.Query(`SELECT "id","parent_id" FROM "access_rows"
 		WHERE "table_name"=? AND "is_deleted"=0`, table)
-	if err != nil || len(ar) == 0 {
+	if err != nil || len(accessRows) == 0 {
 		return rows
 	}
 	blocked := map[string]bool{}
-	for _, entry := range ar {
+	for _, entry := range accessRows {
 		granted, err := api.Links("access_rows", entry["id"], "groups")
 		if err != nil || len(granted) == 0 {
 			continue

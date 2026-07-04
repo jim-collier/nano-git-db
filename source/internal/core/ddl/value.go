@@ -28,9 +28,9 @@ func IsNull(s string) bool { return strings.TrimSpace(s) == "NULL" }
 
 // AsBool parses the DDL boolean vocabulary. Second return is false if not a bool.
 func AsBool(s string) (bool, bool) {
-	t := strings.TrimSpace(s)
-	t, _ = Unquote(t)
-	switch strings.ToLower(t) {
+	trimmed := strings.TrimSpace(s)
+	trimmed, _ = Unquote(trimmed)
+	switch strings.ToLower(trimmed) {
 	case "true", "1", "t", "yes", "y", "enable", "enabled":
 		return true, true
 	case "false", "0", "f", "no", "n", "disable", "disabled":
@@ -42,11 +42,11 @@ func AsBool(s string) (bool, bool) {
 // AsFloat parses a number, tolerating thousands commas and a bare leading or
 // trailing dot (`.1`, `1.`).
 func AsFloat(s string) (float64, bool) {
-	n, ok := normNum(s)
+	normalized, ok := normNum(s)
 	if !ok {
 		return 0, false
 	}
-	f, err := strconv.ParseFloat(n, 64)
+	f, err := strconv.ParseFloat(normalized, 64)
 	if err != nil {
 		return 0, false
 	}
@@ -92,36 +92,36 @@ func AsSQL(s string) (string, bool) {
 func SplitList(s string) []string {
 	parts := splitTop(s)
 	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
 			continue
 		}
-		if u, q := Unquote(p); q {
-			p = u
+		if u, q := Unquote(part); q {
+			part = u
 		}
-		out = append(out, p)
+		out = append(out, part)
 	}
 	return out
 }
 
 // splitTop splits on unquoted, unbracketed top-level commas.
 func splitTop(s string) []string {
-	var q byte
+	var quote byte
 	depth := 0
 	var parts []string
 	start := 0
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if q != 0 {
-			if c == q {
-				q = 0
+		if quote != 0 {
+			if c == quote {
+				quote = 0
 			}
 			continue
 		}
 		switch c {
 		case '"', '\'', '`':
-			q = c
+			quote = c
 		case '(', '[':
 			depth++
 		case ')', ']':

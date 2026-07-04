@@ -10,16 +10,16 @@ package ddl
 // (deny wins), an empty whitelist means everyone, otherwise membership in
 // any whitelisted group is required.
 func (r AccessRule) Allows(groups map[string]bool) bool {
-	for _, g := range r.Blacklist {
-		if groups[g] {
+	for _, group := range r.Blacklist {
+		if groups[group] {
 			return false
 		}
 	}
 	if len(r.Whitelist) == 0 {
 		return true
 	}
-	for _, g := range r.Whitelist {
-		if groups[g] {
+	for _, group := range r.Whitelist {
+		if groups[group] {
 			return true
 		}
 	}

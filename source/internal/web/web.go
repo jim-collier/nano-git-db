@@ -50,57 +50,57 @@ func Run(args []string) error {
 		return err
 	}
 	keyFile, pref := config.ResolveEncryption(ddlPath, nil)
-	c, err := schema.OpenClientWith(schema.OpenOpts{
+	client, err := schema.OpenClientWith(schema.OpenOpts{
 		DDLPath: ddlPath, DBPath: sqlitePath, LogDir: logDir, KeyFile: keyFile, EncryptPref: pref,
 	})
 	if err != nil {
 		return err
 	}
-	defer c.Close()
-	for _, w := range c.Warnings {
-		fmt.Println("warning:", w)
+	defer client.Close()
+	for _, warning := range client.Warnings {
+		fmt.Println("warning:", warning)
 	}
-	bs, err := schema.Builtins()
+	builtins, err := schema.Builtins()
 	if err != nil {
 		return err
 	}
-	tw, err := script.Attach(c.API, ddlPath, logDir, c.Schema, bs)
+	attachWarnings, err := script.Attach(client.API, ddlPath, logDir, client.Schema, builtins)
 	if err != nil {
 		return err
 	}
-	for _, w := range tw {
-		fmt.Println("warning:", w)
+	for _, warning := range attachWarnings {
+		fmt.Println("warning:", warning)
 	}
-	cat, err := schema.NewCatalog(c.API, c.Schema, bs)
+	cat, err := schema.NewCatalog(client.API, client.Schema, builtins)
 	if err != nil {
 		return err
 	}
-	cat.Queries = c.Queries
-	for _, w := range cat.Warnings {
-		fmt.Println("warning:", w)
+	cat.Queries = client.Queries
+	for _, warning := range cat.Warnings {
+		fmt.Println("warning:", warning)
 	}
-	s, err := newServer(c.API, cat)
+	srv, err := newServer(client.API, cat)
 	if err != nil {
 		return err
 	}
 
-	stop := c.StartAutoSync(c.Schema.TunableInt("git_sync_frequency", 60),
-		func(w string) { fmt.Println("warning:", w) })
+	stop := client.StartAutoSync(client.Schema.TunableInt("git_sync_frequency", 60),
+		func(warning string) { fmt.Println("warning:", warning) })
 	defer stop()
 
 	addr := "127.0.0.1:8765" // local UI - do not bind to all interfaces
 	// Explicit timeouts: the stdlib defaults are infinite, so a stalled client
 	// could pin connections open forever.
-	srv := &http.Server{
+	httpSrv := &http.Server{
 		Addr:              addr,
-		Handler:           s.routes(),
+		Handler:           srv.routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}
 	fmt.Printf("ngdb web UI: http://%s\n", addr)
-	return srv.ListenAndServe()
+	return httpSrv.ListenAndServe()
 }
 
 type server struct {
@@ -146,12 +146,12 @@ func (s *server) routes() http.Handler {
 
 // table pulls and validates the table path segment; "" means already handled.
 func (s *server) table(w http.ResponseWriter, r *http.Request) string {
-	t := r.PathValue("table")
-	if !s.cat.Has(t) {
+	name := r.PathValue("table")
+	if !s.cat.Has(name) {
 		http.Error(w, "no such table", http.StatusNotFound)
 		return ""
 	}
-	return t
+	return name
 }
 
 func (s *server) render(w http.ResponseWriter, name string, data any) {
@@ -169,23 +169,23 @@ func (s *server) index(w http.ResponseWriter, r *http.Request) {
 // rows renders the grid partial - also the response to every write, so the
 // user always lands back on the refreshed table.
 func (s *server) rows(w http.ResponseWriter, r *http.Request) {
-	t := s.table(w, r)
-	if t == "" {
+	table := s.table(w, r)
+	if table == "" {
 		return
 	}
-	rows, err := s.cat.LiveRows(s.api, t)
+	rows, err := s.cat.LiveRows(s.api, table)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	s.render(w, "rows.html", map[string]any{
-		"Table": t, "Cols": s.cat.ColumnsFor(t), "Rows": rows,
+		"Table": table, "Cols": s.cat.ColumnsFor(table), "Rows": rows,
 	})
 }
 
 func (s *server) form(w http.ResponseWriter, r *http.Request) {
-	t := s.table(w, r)
-	if t == "" {
+	table := s.table(w, r)
+	if table == "" {
 		return
 	}
 	id := r.PathValue("id")
@@ -193,7 +193,7 @@ func (s *server) form(w http.ResponseWriter, r *http.Request) {
 	if id != "" {
 		var ok bool
 		var err error
-		row, ok, err = s.api.Get(t, id)
+		row, ok, err = s.api.Get(table, id)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -204,29 +204,29 @@ func (s *server) form(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	data := map[string]any{
-		"Table": t, "ID": id, "Fields": s.cat.Fields[t], "Row": row,
+		"Table": table, "ID": id, "Fields": s.cat.Fields[table], "Row": row,
 	}
 	// the row's opt-in extras only exist once the row does
 	if id != "" {
-		feats := s.cat.Features[t]
+		feats := s.cat.Features[table]
 		data["CanComment"] = feats.Comments
 		data["CanAttachURI"] = feats.URIAttachments
 		data["CanAttachFile"] = feats.LocalAttachments
 		if feats.Comments {
-			cs, err := s.api.CommentsFor(t, id)
+			comments, err := s.api.CommentsFor(table, id)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			data["Comments"] = cs
+			data["Comments"] = comments
 		}
 		if feats.URIAttachments || feats.LocalAttachments {
-			atts, err := s.api.AttachmentsFor(t, id)
+			attachments, err := s.api.AttachmentsFor(table, id)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			data["Attachments"] = atts
+			data["Attachments"] = attachments
 		}
 	}
 	s.render(w, "form.html", data)
@@ -234,8 +234,8 @@ func (s *server) form(w http.ResponseWriter, r *http.Request) {
 
 // comment adds a comment and lands back on the refreshed form.
 func (s *server) comment(w http.ResponseWriter, r *http.Request) {
-	t := s.table(w, r)
-	if t == "" {
+	table := s.table(w, r)
+	if table == "" {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -243,7 +243,7 @@ func (s *server) comment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if text := r.PostForm.Get("comment"); text != "" {
-		if _, err := s.api.CommentAdd(t, r.PathValue("id"), text); err != nil {
+		if _, err := s.api.CommentAdd(table, r.PathValue("id"), text); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -254,8 +254,8 @@ func (s *server) comment(w http.ResponseWriter, r *http.Request) {
 // attach adds a URI (kind=uri) or copied-file (kind=file, server-local path -
 // this UI is 127.0.0.1-only, the browser runs on the same machine) attachment.
 func (s *server) attach(w http.ResponseWriter, r *http.Request) {
-	t := s.table(w, r)
-	if t == "" {
+	table := s.table(w, r)
+	if table == "" {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -266,9 +266,9 @@ func (s *server) attach(w http.ResponseWriter, r *http.Request) {
 	if target != "" {
 		var err error
 		if r.PostForm.Get("kind") == "file" {
-			_, err = s.api.AttachFile(t, r.PathValue("id"), target, desc)
+			_, err = s.api.AttachFile(table, r.PathValue("id"), target, desc)
 		} else {
-			_, err = s.api.AttachURI(t, r.PathValue("id"), target, desc)
+			_, err = s.api.AttachURI(table, r.PathValue("id"), target, desc)
 		}
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -280,9 +280,9 @@ func (s *server) attach(w http.ResponseWriter, r *http.Request) {
 
 // formFields reads only the table's declared fields from the request - posted
 // extras (or system columns) never reach the CRUD layer.
-func (s *server) formFields(r *http.Request, t string) map[string]string {
+func (s *server) formFields(r *http.Request, table string) map[string]string {
 	vals := map[string]string{}
-	for _, f := range s.cat.Fields[t] {
+	for _, f := range s.cat.Fields[table] {
 		if _, ok := r.PostForm[f]; ok {
 			vals[f] = r.PostForm.Get(f)
 		}
@@ -291,15 +291,15 @@ func (s *server) formFields(r *http.Request, t string) map[string]string {
 }
 
 func (s *server) create(w http.ResponseWriter, r *http.Request) {
-	t := s.table(w, r)
-	if t == "" {
+	table := s.table(w, r)
+	if table == "" {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if _, err := s.api.Create(t, s.formFields(r, t)); err != nil {
+	if _, err := s.api.Create(table, s.formFields(r, table)); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -308,8 +308,8 @@ func (s *server) create(w http.ResponseWriter, r *http.Request) {
 
 // update writes only the changed fields, so the tx-log stays field-granular.
 func (s *server) update(w http.ResponseWriter, r *http.Request) {
-	t := s.table(w, r)
-	if t == "" {
+	table := s.table(w, r)
+	if table == "" {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -317,7 +317,7 @@ func (s *server) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	cur, ok, err := s.api.Get(t, id)
+	cur, ok, err := s.api.Get(table, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -327,13 +327,13 @@ func (s *server) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	changed := map[string]string{}
-	for f, v := range s.formFields(r, t) {
+	for f, v := range s.formFields(r, table) {
 		if cur[f] != v {
 			changed[f] = v
 		}
 	}
 	if len(changed) > 0 {
-		if err := s.api.Update(t, id, changed); err != nil {
+		if err := s.api.Update(table, id, changed); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -342,8 +342,8 @@ func (s *server) update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) del(w http.ResponseWriter, r *http.Request) {
-	t := s.table(w, r)
-	if t == "" {
+	table := s.table(w, r)
+	if table == "" {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -353,9 +353,9 @@ func (s *server) del(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var err error
 	if r.PostForm.Get("hard") == "1" {
-		err = s.api.Delete(t, id)
+		err = s.api.Delete(table, id)
 	} else {
-		err = s.api.MarkDelete(t, id)
+		err = s.api.MarkDelete(table, id)
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
