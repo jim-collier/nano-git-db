@@ -55,7 +55,8 @@ In each section, items are listed approximately from newest to oldest.
 
 - 🔘 Set up the folder hierarchy to separate and delineate the concerns decided in the "Misc to-do" above. (Possibly an additional new private repo?)
 
-- 🔘 Make opening menu look more like a menu. Better spacing around and in beteen items.
+- ✅ Make opening menu look more like a menu. Better spacing around and in beteen items.
+	- Done: the startup picker is now a centred, bordered panel with margins instead of a full-screen list, and blank spacer rows sit between entries. Up/Down skip the spacers so the highlight only lands on real entries.
 
 - 🔘 When defining a db in the TUI or CLI, allow just pointing to a top-level repo - then figure everything else out (i.e. "[repo dir]/ngdb/[short spaceless db name]/") If the dir is not a github repo, use the directory exactly as entered (assuming it's empty or nonexistent). Don't ask for txlog or config files, just create them in the dir.
 
