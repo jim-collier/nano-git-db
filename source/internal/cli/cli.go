@@ -66,7 +66,7 @@ func Run(args []string) error {
 	case len(args) >= 6 && args[0] == "--rename-field":
 		return renameField(args[1], args[2], args[3], args[4], args[5])
 	}
-	fmt.Println("usage: nanogitdb <verb> ...")
+	fmt.Println("usage: ngdb <verb> ...")
 	fmt.Println("  setup and run modes:")
 	fmt.Println("    --init [repo-or-dir]           register the $PWD .ddl as a database")
 	fmt.Println("    --config <dir> ...             use an alternate registry dir, then run")

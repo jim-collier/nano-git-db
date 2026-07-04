@@ -146,22 +146,22 @@ These files can go anywhere, this is just the suggested/default location. (This 
 
 Required and/or auto-generated:
 
-- `/usr/local/bin/nanogitdb`
+- `/usr/local/bin/ngdb`
 	- The one and only executable.
 
-- `./repo/nanogitdb/the-instance-name/txlog.csv`
+- `./repo/ngdb/the-instance-name/txlog.csv`
 	- The transaction log - the source of truth, updated by all clients, synced and auto-reconciled by git (if using git).
 	- Doesn't have to be in this location, just somewhere in a git repo if you want syncing.
 	- The program periodically syncs this, so that you're working with fresh data.
 
-- `./repo/nanogitdb/the-instance-name/schema.ddl`
+- `./repo/ngdb/the-instance-name/schema.ddl`
 	- Your database schema definition file.
 	- It gracefully accepts local or synced additions and changes to the DDL: new fields/tables are migrated into the local database live, and previous transactions are not affected.
 
-- `./repo/nanogitdb/the-instance-name/config.toml`
+- `./repo/ngdb/the-instance-name/config.toml`
 	- Repo-specific settings. (Planned - see the tunable-options backlog item.)
 
-- `~/.local/share/nanogitdb/the-instance-name/db.sqlite`
+- `~/.local/share/ngdb/the-instance-name/db.sqlite`
 	- The local database - a derived, rebuildable view of the transaction log. Changes come from and go to the log every time it syncs, but you're working with this database.
 
 <!--
@@ -178,10 +178,10 @@ Optional (planned - see the predefined-queries backlog item):
 - `./repo/the-instance-name/named-queries.txt`
 	- Synced predefined named queries, available to everyone.
 
-- `/etc/nanogitdb/the-instance-name/named-queries.txt`
+- `/etc/ngdb/the-instance-name/named-queries.txt`
 	- Predefined named queries, available only to the local machine.
 
-- `~/.local/share/nanogitdb/the-instance-name/named-queries.txt`
+- `~/.local/share/ngdb/the-instance-name/named-queries.txt`
 	- Predefined named queries, available only to the local user.
 
 ## Example use-cases
@@ -197,7 +197,7 @@ Grab a release binary (once releases start), or build from source. It's one stat
 
 ## Building from source
 
-`./cicd/build.bash` produces a size-optimized, fully static `./bin/nanogitdb`. Requirements: Go only - `CGO_ENABLED=0` and committed vendored dependencies mean no C toolchain and no network. Cross-compile by exporting `GOOS`/`GOARCH` first (pure Go, so every target builds from any machine).
+`./cicd/build.bash` produces a size-optimized, fully static `./bin/ngdb`. Requirements: Go only - `CGO_ENABLED=0` and committed vendored dependencies mean no C toolchain and no network. Cross-compile by exporting `GOOS`/`GOARCH` first (pure Go, so every target builds from any machine).
 
 ## Quick start
 
@@ -263,25 +263,25 @@ Every data verb takes the same `<ddl> <sqlite> <logdir>` trio (here `.` is the t
 
 ```
 # build the local view from the schema
-nanogitdb build todo.ddl todo.sqlite
+ngdb build todo.ddl todo.sqlite
 
 # add a top-level task; the command prints the new row's id
-nanogitdb create todo.ddl todo.sqlite . task title="Ship v1" status=open
+ngdb create todo.ddl todo.sqlite . task title="Ship v1" status=open
 
 # add a subtask under it (paste the parent id from above)
-nanogitdb create todo.ddl todo.sqlite . task title="Write docs" parent_task=<parent-id>
+ngdb create todo.ddl todo.sqlite . task title="Write docs" parent_task=<parent-id>
 
 # add a comment to a task, then list its comments
-nanogitdb comment  todo.ddl todo.sqlite . task <id> "kickoff notes"
-nanogitdb comments todo.ddl todo.sqlite . task <id>
+ngdb comment  todo.ddl todo.sqlite . task <id> "kickoff notes"
+ngdb comments todo.ddl todo.sqlite . task <id>
 
 # read it back
-nanogitdb query todo.ddl todo.sqlite . "SELECT title, status FROM task WHERE is_deleted = 0"
+ngdb query todo.ddl todo.sqlite . "SELECT title, status FROM task WHERE is_deleted = 0"
 ```
 
-Prefer a UI? `nanogitdb --tui todo.ddl todo.sqlite .` opens the terminal UI over the same database, and `nanogitdb --serve todo.ddl todo.sqlite .` serves a local web UI on `127.0.0.1:8765`.
+Prefer a UI? `ngdb --tui todo.ddl todo.sqlite .` opens the terminal UI over the same database, and `ngdb --serve todo.ddl todo.sqlite .` serves a local web UI on `127.0.0.1:8765`.
 
-Tired of typing paths? Run `nanogitdb --init` in the directory with your `todo.ddl` to register it; after that, a bare `nanogitdb` shows a picker of your databases (or run `--init` inside a git repo to auto-place the synced tx-log under it). See [Startup discovery](syntax.md#startup-discovery-and-the-database-registry).
+Tired of typing paths? Run `ngdb --init` in the directory with your `todo.ddl` to register it; after that, a bare `ngdb` shows a picker of your databases (or run `--init` inside a git repo to auto-place the synced tx-log under it). See [Startup discovery](syntax.md#startup-discovery-and-the-database-registry).
 
 ## Full syntax reference
 

@@ -32,7 +32,7 @@ func resolveArgs(args []string) (ddlPath, sqlitePath, logDir string, err error) 
 	if d, s, l, ok := config.PWDTriple(); ok {
 		return d, s, l, nil
 	}
-	return "", "", "", fmt.Errorf("usage: nanogitdb --serve <ddl> <sqlite> <logdir> (or run from a directory containing a .ddl)")
+	return "", "", "", fmt.Errorf("usage: ngdb --serve <ddl> <sqlite> <logdir> (or run from a directory containing a .ddl)")
 }
 
 //go:embed assets
@@ -41,7 +41,7 @@ var assetsFS embed.FS
 //go:embed templates
 var tplFS embed.FS
 
-// Run serves the web UI: nanogitdb --serve <ddl> <sqlite> <logdir>. With no
+// Run serves the web UI: ngdb --serve <ddl> <sqlite> <logdir>. With no
 // paths it uses a DDL in the current directory; the web front-end has no
 // picker, so with neither it requires the explicit triple.
 func Run(args []string) error {
@@ -99,7 +99,7 @@ func Run(args []string) error {
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}
-	fmt.Printf("nanogitdb web UI: http://%s\n", addr)
+	fmt.Printf("ngdb web UI: http://%s\n", addr)
 	return srv.ListenAndServe()
 }
 
