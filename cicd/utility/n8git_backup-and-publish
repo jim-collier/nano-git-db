@@ -66,6 +66,7 @@ fSyntax(){  { ((doQuietly)) || ((wasShown_Syntax)); } && return; wasShown_Syntax
 	#           X-------------------------------------------------------------------------------X
 	fEcho_Clean "Arguments:"
 	fEcho_Clean "  --quiet, -q [optional]: Be less verbose, and don't prompt user to continue."
+	fEcho_Clean "  --no-prompt, --yes, -y [optional]: Skip the confirm prompt, keep the review."
 	fEcho_Clean "  --message, --msg, -m [optional]: Commit message (-m MSG or -m=MSG)."
 	fEcho_Clean "                                  Auto-generated when --quiet and no message."
 	fEcho_Clean "  --help, --version [or -h, -v]"
@@ -90,11 +91,14 @@ fMain(){
 	## Generic variables
 	local -i wasShown_Copyright=0; local -i wasShown_About=0; wasShown_Syntax=0
 
-	## Arguments: -q/--quiet (no prompt), -m/--message/--msg (commit message;
-	## -m MSG or -m=MSG), -h/--help, -v/--version.
+	## Arguments: -q/--quiet (no prompt + quiet), --no-prompt (skip just the
+	## confirm y/n but keep the review display; used when a caller like cicd has
+	## already gated), -m/--message/--msg (commit message; -m MSG or -m=MSG),
+	## -h/--help, -v/--version.
 	local commitMessage=""
 	while (($#)); do case "${1}" in
 		-q|--quiet)                doQuietly=1                          ; shift ;;
+		--no-prompt|--yes|-y)      doPromptToContinue=0                 ; shift ;;
 		--message=*|--msg=*|-m=*)  commitMessage="${1#*=}"              ; shift ;;
 		-m|--message|--msg)        commitMessage="${2-}"; shift; (($#)) && shift ;;
 		-h|--help)                 fCopyright; fAbout; fSyntax          ; return 0 ;;
@@ -381,3 +385,4 @@ fMain  "${@}"
 ##			- Real arg parsing for -q/--quiet (fixed the old no-op) and -m/--message/--msg (-m MSG or -m=MSG); auto-message under --quiet.
 ##			- --quiet now flows to git: pull --no-edit, commit -m so an unattended publish never opens an editor.
 ##			- Dropped the unused fParseArgs template block.
+##		- 20260704 JC: Added --no-prompt/--yes/-y (skip the confirm y/n, keep the review display) for callers that already gated.
