@@ -46,6 +46,7 @@ if [[ -z "${doQuietly+x}" ]]; then
 
 	## Generic constants
 	declare  -i doQuietly=0
+	declare  -i doQuick=0  ## --quick: skip cross-builds and the slow supply-chain scan
 	declare  -i doPromptToContinue=1
 	declare -r  thisVersion="1.0.0-beta3"         ## Put you script's semantic version here.
 	declare -r  thisBuild="1mzfd9c"
@@ -99,6 +100,7 @@ fSyntax(){  { ((doQuietly)) || ((wasShown_Syntax)); } && return; wasShown_Syntax
 	#           X-------------------------------------------------------------------------------X
 	fEcho_Clean "Usage: ${meName} [options]"
 	fEcho_Clean "  -q, --quiet         Run unattended (no prompt) and quiet; flows to publish."
+	fEcho_Clean "      --quick         Skip cross-builds and the slow govulncheck scan."
 	fEcho_Clean "  -m, --message MSG   Commit message for publish (also --msg; -m MSG or -m=MSG)."
 	fEcho_Clean "                      With -q and no -m, a message is auto-generated."
 	fEcho_Clean "  -h, --help          Show this."
@@ -115,6 +117,7 @@ fMain(){
 	local cliMessage=""
 	while (($#)); do case "${1}" in
 		-q|--quiet)                doQuietly=1                          ; shift ;;
+		--quick)                   doQuick=1                            ; shift ;;
 		--message=*|--msg=*|-m=*)  cliMessage="${1#*=}"                 ; shift ;;
 		-m|--message|--msg)        cliMessage="${2-}"; shift; (($#)) && shift ;;
 		-h|--help)                 fCopyright; fAbout; fSyntax          ; return 0 ;;
@@ -158,6 +161,9 @@ fMain(){
 		fEcho_Clean "Win x86_64 zip location ......: ${filePath_Exec_Zip_Win_x86_64}"
 		fi
 		fEcho_Clean "Test script ..................: ${filePath_CICD_TestExec}"
+		if ((doQuick)); then
+		fEcho_Clean "Quick mode ...................: cross-builds + govulncheck skipped"
+		fi
 		fEcho_Clean "Git commit and push script ...: ${gitAutomationScript}"
 		if [[ -n "${commitMessage}" ]]; then
 		fEcho_Clean "Publish commit message .......: \"${commitMessage}\""
@@ -188,18 +194,22 @@ fMain(){
 		fEcho_Clean "Built ${filePath_ExecToTestAndInstall_BuildLocation}"
 
 		## Cross-compile: pure Go, so every target builds here with no extra toolchains.
-		## build.bash names cross outputs bin/ngdb-<os>-<arch>[.exe].
-		fEcho_Clean; fEcho "Cross-compile (win-amd64, linux-arm64, win-arm64)"
-		GOOS=windows GOARCH=amd64  "${dirPath_Base}/cicd/build.bash"
-		GOOS=linux   GOARCH=arm64  "${dirPath_Base}/cicd/build.bash"
-		GOOS=windows GOARCH=arm64  "${dirPath_Base}/cicd/build.bash"
-		## macOS deferred: needs a Mac for signing/testing (see backlog).
+		## build.bash names cross outputs bin/ngdb-<os>-<arch>[.exe]. Skipped under --quick.
+		if ((doQuick)); then
+			fEcho_Clean; fEcho "Cross-compile (skipped: --quick)"
+		else
+			fEcho_Clean; fEcho "Cross-compile (win-amd64, linux-arm64, win-arm64)"
+			GOOS=windows GOARCH=amd64  "${dirPath_Base}/cicd/build.bash"
+			GOOS=linux   GOARCH=arm64  "${dirPath_Base}/cicd/build.bash"
+			GOOS=windows GOARCH=arm64  "${dirPath_Base}/cicd/build.bash"
+			## macOS deferred: needs a Mac for signing/testing (see backlog).
 
-		## Package the Windows x86_64 zip
-		[[ ! -d "${dirPath_Base}/dist" ]]  &&  mkdir -p "${dirPath_Base}/dist"
-		rm -f "${filePath_Exec_Zip_Win_x86_64}"
-		( cd "${dirPath_Base}/bin"  &&  zip -q9 "../dist/$(basename "${filePath_Exec_Zip_Win_x86_64}")" "${exeName}-windows-amd64.exe" )
-		fEcho_Clean "Packaged ${filePath_Exec_Zip_Win_x86_64}"
+			## Package the Windows x86_64 zip
+			[[ ! -d "${dirPath_Base}/dist" ]]  &&  mkdir -p "${dirPath_Base}/dist"
+			rm -f "${filePath_Exec_Zip_Win_x86_64}"
+			( cd "${dirPath_Base}/bin"  &&  zip -q9 "../dist/$(basename "${filePath_Exec_Zip_Win_x86_64}")" "${exeName}-windows-amd64.exe" )
+			fEcho_Clean "Packaged ${filePath_Exec_Zip_Win_x86_64}"
+		fi
 
 	fi
 
@@ -208,12 +218,17 @@ fMain(){
 	"${filePath_CICD_TestExec}"
 	fEcho_Clean "Tests passed"
 
-	## Supply-chain checks (need network for the tool/vuln db; the offline
-	## checks all live in test.bash). Real findings fail the pipeline.
-	fEcho_Clean; fEcho "Supply-chain (go mod verify + govulncheck)"
+	## Supply-chain checks. go mod verify is quick and offline; govulncheck pulls
+	## the tool + vuln db over the network and is the slow one, so --quick skips
+	## it (the offline checks all live in test.bash). Real findings fail the run.
+	fEcho_Clean; fEcho "Supply-chain (go mod verify$( ((doQuick)) || echo " + govulncheck"))"
 	( cd "${dirPath_Source}"  &&  go mod verify )
-	( cd "${dirPath_Source}"  &&  GOFLAGS=  go run golang.org/x/vuln/cmd/govulncheck@latest ./... )
-	fEcho_Clean "Module verified, no known vulnerabilities"
+	if ((doQuick)); then
+		fEcho_Clean "Module verified (govulncheck skipped: --quick)"
+	else
+		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run golang.org/x/vuln/cmd/govulncheck@latest ./... )
+		fEcho_Clean "Module verified, no known vulnerabilities"
+	fi
 
 	popd 1>/dev/null
 
@@ -233,8 +248,10 @@ fMain(){
 		fi
 	done;:
 
-	## Windows x86_64
-	if [[ ! -f "${filePath_Exec_Zip_Win_x86_64}" ]]; then
+	## Windows x86_64 (no fresh zip under --quick, so skip rather than install a stale one)
+	if ((doQuick)); then
+		fEcho_Clean "Windows x86_64 install skipped (--quick)"
+	elif [[ ! -f "${filePath_Exec_Zip_Win_x86_64}" ]]; then
 		fEcho "Not found: ${filePath_Exec_Zip_Win_x86_64}"
 	else
 		for nextPath in "${preferredInstallPaths_Win_x8664[@]}"; do
@@ -506,3 +523,4 @@ fMain  "${@}"
 ##		- 20260703 JC: Blank line between major stages for readability.
 ##		- 20260704 JC: Added -q/--quiet (unattended, flows to publish) and -m/--message (auto-generated under -q); stage headers use fEcho.
 ##		- 20260704 JC: Renamed the built executable nanogitdb -> ngdb.
+##		- 20260704 JC: Added --quick (skip cross-builds and govulncheck).
