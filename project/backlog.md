@@ -55,7 +55,7 @@ In each section, items are listed approximately from newest to oldest.
 ### New features and enhancements
 
 - 🛠️ Set up the folder hierarchy to separate and delineate the concerns decided in the "Misc to-do" above. (Possibly an additional new private repo?)
-	- Approach decided in the enterprise repo docs; now the active implementation phase (folder renames + a new private repo).
+	- Approach decided in the enterprise repo docs. Folder layout now in place: the repos are renamed and the additional private repo is created and scaffolded; the concern implementations follow in later phases.
 
 - ✅ Make opening menu look more like a menu. Better spacing around and in beteen items.
 	- Done: the startup picker is now a centred, bordered panel with margins instead of a full-screen list, and blank spacer rows sit between entries. Up/Down skip the spacers so the highlight only lands on real entries.
