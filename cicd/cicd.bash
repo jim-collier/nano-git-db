@@ -39,7 +39,7 @@ if [[ -z "${doQuietly+x}" ]]; then
 	declare     filePath_ExecToTestAndInstall_FinalHome="${dirPath_Base}/bin/${exeName}"
 	declare     filePath_Exec_Zip_Win_x86_64="${dirPath_Base}/dist/${exeName}-windows-x86_64.zip"
 	declare     filePath_CICD_TestExec="${dirPath_Base}/cicd/test.bash"
-	declare     gitAutomationScript="cicd/utility/n8git_backup-and-publish"
+	declare     gitAutomationScript="${dirPath_Base}/cicd/utility/n8git_backup-and-publish"
 	declare -ra preferredInstallPaths_Bash=("${HOME}/synced/0-0/common/exec/util/linux/bash"                    "/usr/local/sbin/"                                )  ## First one that exists, wins
 	declare -ra preferredInstallPaths_Linux_x8664=("${HOME}/synced/0-0/common/exec/util/linux/bin"              "/usr/local/sbin/"                                )  ## First one that exists, wins
 	declare -ra preferredInstallPaths_Win_x8664=("${HOME}/synced/0-0/common/exec/util/mswin/cli/by-self/win64"  "${HOME}/synced/0-0/common/exec/util/win/win64jc" )  ## First one that exists, wins
@@ -150,9 +150,12 @@ fMain(){
 		## Build (size-optimized native; build.bash owns the flags, vendor mode, and the bin/ output)
 		fEcho "$(date "+%Y%m%d-%H%M%S") build.bash: Starting ..."
 		"${dirPath_Base}/cicd/build.bash"
-		fEcho "$(date "+%Y%m%d-%H%M%S") Minimal execution test ..."
-		"${filePath_ExecToTestAndInstall_BuildLocation}"  ## Bare invocation prints usage; nonzero exit fails the pipeline
+		## Minimal execution test: --version prints one line and exits, never opening the
+		## TUI. Running the app for real stays a separate manual step before the merge.
+		fEcho "$(date "+%Y%m%d-%H%M%S") Version check ..."
+		"${filePath_ExecToTestAndInstall_BuildLocation}" --version
 
+		fEcho_Force  ## blank line between major sections
 		## Cross-compile: pure Go, so every target builds here with no extra toolchains.
 		## build.bash names cross outputs bin/nanogitdb-<os>-<arch>[.exe].
 		fEcho "$(date "+%Y%m%d-%H%M%S") Cross-compile: Starting ..."
@@ -169,11 +172,13 @@ fMain(){
 
 	fi
 
+	fEcho_Force  ## blank line between major sections
 	## Test
 	fEcho "$(date "+%Y%m%d-%H%M%S") Test: Starting ..."
 	"${filePath_CICD_TestExec}"
 	fEcho_ResetBlankCounter
 
+	fEcho_Force  ## blank line between major sections
 	## Supply-chain checks (need network for the tool/vuln db; the offline
 	## checks all live in test.bash). Real findings fail the pipeline.
 	fEcho "$(date "+%Y%m%d-%H%M%S") go mod verify + govulncheck: Starting ..."
@@ -182,6 +187,7 @@ fMain(){
 
 	popd 1>/dev/null
 
+	fEcho_Force  ## blank line between major sections
 	## Install locally (dogfood it)
 
 	## Linux x86_64
@@ -216,6 +222,7 @@ fMain(){
 		done;:
 	fi
 
+	fEcho_Force  ## blank line between major sections
 	## Git automation script (e.g. commit, push)
 	"${gitAutomationScript}"
 
@@ -463,3 +470,5 @@ fMain  "${@}"
 ##		- 20260701 JC: Adapted from the convert-base-v2 template: nanogitdb name/paths, build.bash instead of make; cross-compile deferred to the CI/CD backlog item.
 ##		- 20260701 JC: build.bash moved into cicd/ and now outputs straight to bin/; dropped the staging copy.
 ##		- 20260701 JC: Wired cross-compile (win-amd64, linux-arm64, win-arm64), the windows zip, and govulncheck.
+##		- 20260703 JC: Replaced the post-build bare launch (which opened the TUI) with a --version check. Fixed the git-automation script path - it was missing the base prefix and doubled the cicd/ segment.
+##		- 20260703 JC: Blank line between major stages for readability.

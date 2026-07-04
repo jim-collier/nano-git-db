@@ -18,9 +18,19 @@ import (
 	"github.com/jim-collier/nano-git-db/internal/web"
 )
 
+// Version is stamped at build time via -ldflags -X (see cicd/build.bash); it
+// stays "dev" for a plain `go build`.
+var Version = "dev"
+
 // Run dispatches the given args (os.Args[1:]) to a front-end and returns its
 // error, if any.
 func Run(args []string) error {
+	// --version: print the build version and stop. A concise line the CI/CD
+	// pipeline can run to confirm the binary executes, without opening the TUI.
+	if len(args) > 0 && (args[0] == "--version" || args[0] == "-v") {
+		fmt.Println("nanogitdb " + Version)
+		return nil
+	}
 	// --config[=path]: a global prefix that redirects the database registry;
 	// strip it, apply the override, then dispatch the remaining args normally.
 	if len(args) > 0 {
