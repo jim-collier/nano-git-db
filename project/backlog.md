@@ -77,7 +77,8 @@ In each section, items are listed approximately from newest to oldest.
 	- The signed-in user must reach the data layer, so the existing user and group permissions apply to the web view.
 	- Settle first how to tell a local machine apart from a proxied one, since a proxy also connects from localhost. Prefer an explicit setting over guessing.
 
-- 🔘 Order of fields in txlog should NOT affect backward or forward schema compatibility.
+- ✅ Order of fields in txlog should NOT affect backward or forward schema compatibility.
+	- Done: the reader maps columns by the header row's names instead of fixed positions. A column can be reordered, added, or dropped - an unknown extra column is ignored, a missing one defaults to empty (this subsumes the old host_name legacy-width special-case). Header rows are detected by their reserved column names, so even the header order can change. A record just needs enough fields to carry the required columns, else it's flagged torn.
 
 - 🛠️ Optional ability to store data encrypted in transaction log. (But always decrypted in user's local SQLite.)
 	- Done (phase 1, field-value encryption): new `internal/core/crypt` uses AES-256-GCM under a per-value subkey derived from the entry's unique tx_id, so nonce reuse can't happen at any record count. Only field values encrypt; every other column stays clear, since git merge and replay need them. Encryption happens on the write path and decryption just before replay; an undecryptable value binds NULL so ciphertext never reaches the view. All four front-ends inherit it. Verified end to end: sensitive data never appears in the synced log, replay with the key restores it, and without the key it shows empty and warns. Full design is in design.md.
