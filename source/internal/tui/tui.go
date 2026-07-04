@@ -25,6 +25,7 @@ import (
 // it opens that database directly; with no paths it uses a DDL sitting in the
 // current directory, else shows the registry picker (choose / create / open).
 func Run(args []string) error {
+	applyTheme(themeIndexByName(config.LoadSettings().Theme)) // so the picker is themed too
 	if len(args) >= 3 {
 		return runOpen(args[0], args[1], args[2], nil)
 	}
@@ -90,8 +91,10 @@ type App struct {
 	status  *tview.TextView
 	vstatus *tview.TextView // open view page's own status line, else nil
 
-	cur  string
-	rows []map[string]string // rows behind the grid, index = grid row-1
+	cur      string
+	curView  *schema.ViewSpec    // open view (mutually exclusive with cur), else nil
+	rows     []map[string]string // rows behind the grid, index = grid row-1
+	themeIdx int
 }
 
 // NewApp builds the UI over an API. Schemas supply table order and editable
@@ -102,14 +105,12 @@ func NewApp(api *crud.API, schemas ...*ddl.Schema) (*App, error) {
 		return nil, err
 	}
 	a := &App{
-		api:    api,
-		cat:    cat,
-		app:    tview.NewApplication(),
-		pages:  tview.NewPages(),
-		list:   tview.NewList(),
-		grid:   tview.NewTable(),
-		status: tview.NewTextView(),
+		api:      api,
+		cat:      cat,
+		app:      tview.NewApplication(),
+		themeIdx: themeIndexByName(config.LoadSettings().Theme),
 	}
+	applyTheme(a.themeIdx) // set global styles before buildUI creates primitives
 	a.buildUI()
 	return a, nil
 }
@@ -135,6 +136,14 @@ func (a *App) RunWith(screen tcell.Screen) error {
 func (a *App) Stop() { a.app.Stop() }
 
 func (a *App) buildUI() {
+	// Fresh primitives each call so a theme switch rebuilds them under the new
+	// global styles (tview captures colours at construction).
+	a.pages = tview.NewPages()
+	a.list = tview.NewList()
+	a.grid = tview.NewTable()
+	a.status = tview.NewTextView()
+	a.vstatus = nil
+
 	a.list.ShowSecondaryText(false).SetBorder(true).SetTitle(" views + tables ")
 	for i := range a.cat.Views {
 		a.list.AddItem(a.cat.Views[i].Name+" (view)", "", 0, nil)
@@ -188,7 +197,7 @@ func (a *App) buildUI() {
 	})
 
 	a.status.SetDynamicColors(true)
-	a.setStatus("enter=open table | in rows: enter=edit n=new d=del x=hard-del c=comments/attachments u/f=attach uri/file r=reload esc=back | q=quit")
+	a.setStatus("enter=open table | in rows: enter=edit n=new d=del x=hard-del c=comments/attachments u/f=attach uri/file r=reload esc=back | T=theme q=quit")
 
 	main := tview.NewFlex().
 		AddItem(a.list, 24, 0, true).
@@ -199,15 +208,20 @@ func (a *App) buildUI() {
 	a.pages.AddPage("main", root, true, true)
 
 	a.app.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
-		// q quits only outside forms/modals, where typing a q is data.
-		if ev.Rune() == 'q' && a.app.GetFocus() != nil {
-			if _, ok := a.app.GetFocus().(*tview.InputField); !ok {
-				a.app.Stop()
-				return nil
-			}
+		// q/T act only outside input fields, where the same keystroke is data.
+		_, inField := a.app.GetFocus().(*tview.InputField)
+		switch {
+		case ev.Rune() == 'q' && !inField:
+			a.app.Stop()
+			return nil
+		case ev.Rune() == 'T' && !inField:
+			a.themePicker()
+			return nil
 		}
 		return ev
 	})
+
+	a.styleWidgets()
 }
 
 func (a *App) setStatus(msg string) {
@@ -227,6 +241,7 @@ func (a *App) openTable(table string) {
 		return
 	}
 	a.cur = table
+	a.curView = nil
 	a.rows = rows
 	cols := a.cat.ColumnsFor(table)
 

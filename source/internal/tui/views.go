@@ -36,6 +36,8 @@ func (p *blockPanel) rowAt(r int) map[string]string {
 }
 
 func (a *App) openView(v *schema.ViewSpec) {
+	a.curView = v // for a live theme rebuild to reopen the right screen
+	a.cur = ""
 	var panels []*blockPanel
 	root := a.blockPrim(v.Root, &panels)
 	// The view page covers the main status bar, so it carries its own; while
@@ -53,6 +55,7 @@ func (a *App) openView(v *schema.ViewSpec) {
 			case ev.Key() == tcell.KeyEscape:
 				a.pages.RemovePage("view")
 				a.vstatus = nil
+				a.curView = nil
 				a.app.SetFocus(a.list)
 				return nil
 			case ev.Key() == tcell.KeyTab:
@@ -92,7 +95,7 @@ func (a *App) openView(v *schema.ViewSpec) {
 	}
 }
 
-const viewHint = "a=load-all p=queries enter=edit tab=next-block esc=back q=quit"
+const viewHint = "a=load-all p=queries enter=edit tab=next-block esc=back T=theme q=quit"
 
 // loadQueryInto renders a named query's dataset in a leaf block, using the
 // query's own column order.
