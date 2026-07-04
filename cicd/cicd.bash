@@ -168,10 +168,19 @@ fMain(){
 		if [[ -n "${commitMessage}" ]]; then
 		fEcho_Clean "Publish commit message .......: \"${commitMessage}\""
 		else
-		fEcho_Clean "Publish commit message .......: (interactive editor)"
+		fEcho_Clean "Publish commit message .......: (prompt below; blank = editor)"
 		fi
 		fEcho_Clean
-		fIntroPromptToContinue  ""
+
+		## Capture the commit message up front so the rest of the run finishes
+		## unattended. This doubles as the go/no-go gate: Ctrl+C here aborts (there
+		## is no separate y/n prompt). A blank reply leaves the editor to open at
+		## publish; -m/-q skip this entirely.
+		if [[ -z "${commitMessage}" ]]; then
+			read -r -p "Publish commit message (blank = editor; Ctrl+C aborts): " reply
+			fEcho_ResetBlankCounter
+			[[ -n "${reply}" ]]  &&  commitMessage="${reply}"
+		fi
 		fEcho_Clean
 	fi
 
@@ -185,7 +194,7 @@ fMain(){
 	if ((isCompileProject)); then
 
 		## Build (size-optimized native; build.bash owns the flags, vendor mode, and the bin/ output)
-		fEcho_Clean; fEcho "Build (native, size-optimized)"
+		fEcho_Section "Build (native, size-optimized)"
 		"${dirPath_Base}/cicd/build.bash"
 		## Minimal execution test: --version prints one line and exits, never opening the
 		## TUI. Running the app for real stays a separate manual step before the merge.
@@ -196,9 +205,9 @@ fMain(){
 		## Cross-compile: pure Go, so every target builds here with no extra toolchains.
 		## build.bash names cross outputs bin/ngdb-<os>-<arch>[.exe]. Skipped under --quick.
 		if ((doQuick)); then
-			fEcho_Clean; fEcho "Cross-compile (skipped: --quick)"
+			fEcho_Section "Cross-compile (skipped: --quick)"
 		else
-			fEcho_Clean; fEcho "Cross-compile (win-amd64, linux-arm64, win-arm64)"
+			fEcho_Section "Cross-compile (win-amd64, linux-arm64, win-arm64)"
 			GOOS=windows GOARCH=amd64  "${dirPath_Base}/cicd/build.bash"
 			GOOS=linux   GOARCH=arm64  "${dirPath_Base}/cicd/build.bash"
 			GOOS=windows GOARCH=arm64  "${dirPath_Base}/cicd/build.bash"
@@ -214,14 +223,14 @@ fMain(){
 	fi
 
 	## Test
-	fEcho_Clean; fEcho "Tests"
+	fEcho_Section "Tests"
 	"${filePath_CICD_TestExec}"
 	fEcho_Clean "Tests passed"
 
 	## Supply-chain checks. go mod verify is quick and offline; govulncheck pulls
 	## the tool + vuln db over the network and is the slow one, so --quick skips
 	## it (the offline checks all live in test.bash). Real findings fail the run.
-	fEcho_Clean; fEcho "Supply-chain (go mod verify$( ((doQuick)) || echo " + govulncheck"))"
+	fEcho_Section "Supply-chain (go mod verify$( ((doQuick)) || echo " + govulncheck"))"
 	( cd "${dirPath_Source}"  &&  go mod verify )
 	if ((doQuick)); then
 		fEcho_Clean "Module verified (govulncheck skipped: --quick)"
@@ -233,7 +242,7 @@ fMain(){
 	popd 1>/dev/null
 
 	## Install locally (dogfood it)
-	fEcho_Clean; fEcho "Dogfood (install locally)"
+	fEcho_Section "Dogfood (install locally)"
 
 	## Linux x86_64
 	for nextPath in "${preferredInstallPaths_Linux_x8664[@]}"; do
@@ -273,7 +282,7 @@ fMain(){
 	## $1; a failing hook warns but does not abort the run.
 	declare hooksDir="${dirPath_Base}/../private/hooks/claude"
 	if [[ -d "${hooksDir}" ]]; then
-		fEcho_Clean; fEcho "Local hooks"
+		fEcho_Section "Local hooks"
 		for nextHook in "${hooksDir}"/*.bash; do
 			[[ -f "${nextHook}" ]]  ||  continue
 			fEcho_Clean "running $(basename "${nextHook}")"
@@ -283,14 +292,16 @@ fMain(){
 
 	## Git automation script (backup, commit, push). Flow the quiet flag and the
 	## resolved commit message through so an unattended run stays hands-off.
-	fEcho_Clean; fEcho "Backup + publish"
-	local -a gitArgs=()
+	fEcho_Section "Backup + publish"
+	## --no-prompt: cicd already gated up front (message captured above), so the
+	## publish step keeps its remote/branch/SSH review but skips a second y/n.
+	local -a gitArgs=(--no-prompt)
 	if ((doQuietly));                then gitArgs+=(--quiet); fi
 	if [[ -n "${commitMessage}" ]];  then gitArgs+=("--message=${commitMessage}"); fi
 	"${gitAutomationScript}"  "${gitArgs[@]}"
 
 	## Done
-	fEcho_Clean; fEcho "${exeName} CI/CD: done."
+	fEcho_Section "${exeName} CI/CD: done."
 }
 
 
@@ -419,6 +430,9 @@ fEcho_Clean()        { local -r toEcho="${1:-}"; fEcho_Clean_byref toEcho; }
 fEcho()              { { [[ -z "${1:-}" ]] && fEcho_Clean ""; } || { local -r toEcho="[ ${1:-} ]"; fEcho_Clean_byref toEcho; }; }
 fEcho_Force()        { _wasLastEchoBlank=0; fEcho "${1:-}"; }
 fEcho_Clean_Force()  { _wasLastEchoBlank=0; local -r toEcho="${1:-}"; fEcho_Clean_byref toEcho; }
+## Section header: a blank line, the letterbox rule, then the bracketed title.
+declare -r _hr="••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"
+fEcho_Section()      { fEcho_Clean; fEcho_Clean_Force "${_hr}"; fEcho "${1:-}"; }
 
 ## Error-handling
 declare -i _wasCleanupRun=0  ## Managed internally by this suite.
@@ -538,3 +552,4 @@ fMain  "${@}"
 ##		- 20260704 JC: Added -q/--quiet (unattended, flows to publish) and -m/--message (auto-generated under -q); stage headers use fEcho.
 ##		- 20260704 JC: Renamed the built executable nanogitdb -> ngdb.
 ##		- 20260704 JC: Added --quick (skip cross-builds and govulncheck).
+##		- 20260704 JC: Preflight now captures the commit message up front (Ctrl+C aborts) instead of a y/n gate; section headers get the letterbox rule; passes --no-prompt to the publish step so it doesn't re-ask.
