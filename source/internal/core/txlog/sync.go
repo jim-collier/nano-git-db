@@ -64,6 +64,24 @@ func RepoRoot(dir string) (string, bool) {
 	return root, root != ""
 }
 
+// RepoAccount returns the git account name configured for dir - user.name, or
+// user.email when the name is unset - or "" when dir is not a repo or nothing is
+// configured. The web UI uses it to identify the local user without a password.
+func RepoAccount(dir string) string {
+	if !InRepo(dir) {
+		return ""
+	}
+	if out, err := gitOut(dir, "config", "user.name"); err == nil {
+		if name := strings.TrimSpace(out); name != "" {
+			return name
+		}
+	}
+	if out, err := gitOut(dir, "config", "user.email"); err == nil {
+		return strings.TrimSpace(out)
+	}
+	return ""
+}
+
 // Sync runs one pass: commit local log changes, then reconcile with the remote.
 // A non-git log dir is a no-op. Union merge auto-resolves append conflicts.
 func (s *Syncer) Sync() (SyncResult, error) {

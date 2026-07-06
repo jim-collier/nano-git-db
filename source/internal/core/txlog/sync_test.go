@@ -150,3 +150,19 @@ func equal(a, b []string) bool {
 	}
 	return true
 }
+
+func TestRepoAccount(t *testing.T) {
+	dir := t.TempDir()
+	if RepoAccount(dir) != "" {
+		t.Fatal("a non-repo dir should have no account")
+	}
+	gitInit(t, dir) // sets user.name = Test
+	if got := RepoAccount(dir); got != "Test" {
+		t.Fatalf("RepoAccount = %q, want Test", got)
+	}
+	// With no name, it falls back to the email.
+	mustGit(t, dir, "config", "--unset", "user.name")
+	if got := RepoAccount(dir); got != "test@example.invalid" {
+		t.Fatalf("RepoAccount email fallback = %q", got)
+	}
+}
