@@ -326,6 +326,8 @@ Setup flags:
 ngdb --init [path]              register the $PWD .ddl as a database (name = its base name)
 ngdb --config <dir> ...         use <dir> as the registry root, then run the rest
 ngdb --encrypt[=on|off|auto] .. set the local encryption preference, then run
+ngdb webuser <username>        set a proxied-mode web login (password from
+                               NGDB_WEB_PASSWORD or a prompt); see Run modes
 ```
 
 `--init` is the command-line equivalent of the picker's "Create new database": it registers the lone `*.ddl` in the current directory and materializes its view (build + seed), so it opens cleanly next time.
@@ -351,6 +353,8 @@ ngdb --version                               print the version and exit (also -v
 ```
 
 The web UI binds to `127.0.0.1` only - that binding is the access control for a single-user local UI. All four front-ends share one core CRUD API, so they behave identically.
+
+Web login: the `web_mode` setting (in `settings.toml`, default `local`) picks how the web UI authenticates. `local` identifies the single user with no password - the git account of the log dir's repo, else the OS user - and refuses to serve if a reverse-proxy header ever appears (so an accidentally exposed box can't run passwordless). `proxied` requires a username and password for every request: add logins with `ngdb webuser <username>` (hashed into `webusers.toml` in the config dir, outside the synced tree), and the signed-in user's group permissions then apply to the web view. Stronger methods are an enterprise feature.
 
 In the TUI, press `T` to pick a colour theme (three dark, three light; the default is dark). Themes use fixed colours for readability regardless of your terminal palette, and the choice is remembered for next time.
 

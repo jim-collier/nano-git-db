@@ -65,6 +65,8 @@ func Run(args []string) error {
 		return renameTable(args[1], args[2], args[3], args[4])
 	case len(args) >= 6 && args[0] == "--rename-field":
 		return renameField(args[1], args[2], args[3], args[4], args[5])
+	case len(args) >= 2 && args[0] == "webuser":
+		return webUser(args[1])
 	}
 	fmt.Println("usage: ngdb <verb> ...")
 	fmt.Println("  setup and run modes:")
@@ -76,6 +78,8 @@ func Run(args []string) error {
 	}
 	fmt.Println("    --tui [<ddl> <sqlite> <dir>]   terminal UI (no paths: pick/create a db)")
 	fmt.Println("    --serve [<ddl> <sqlite> <dir>] local web UI on 127.0.0.1:8765")
+	fmt.Println("    webuser <username>             set a proxied-mode web login")
+	fmt.Println("                                   (password from NGDB_WEB_PASSWORD or prompt)")
 	fmt.Println("    --script <f.lua> <ddl> <sqlite> <dir>   run a Lua script")
 	fmt.Println("    --version, -v                  print the version and exit")
 	fmt.Println("  schema and log:")

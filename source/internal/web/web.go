@@ -14,6 +14,7 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/jim-collier/nano-git-db/gate"
@@ -84,6 +85,7 @@ func Run(args []string) error {
 	if err != nil {
 		return err
 	}
+	srv.auth = newAuth(config.LoadSettings(), logDir, client.API)
 	srv.applyGate(gate.Evaluate())
 
 	stop := client.StartAutoSync(client.Schema.TunableInt("git_sync_frequency", 60),
@@ -109,6 +111,11 @@ type server struct {
 	api *crud.API
 	cat *schema.Catalog
 	tpl *template.Template
+
+	// auth is the login layer (auth.go). umu serializes the per-request acting
+	// user in proxied mode, so concurrent requests never race on api.UserID.
+	auth *authState
+	umu  sync.Mutex
 
 	// startup-notice state (gate.go). now is injectable for tests.
 	now      func() time.Time
@@ -152,7 +159,12 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /t/{table}/{id}/attach", s.attach)
 	mux.HandleFunc("POST /gate/continue", s.gateContinue)
 	mux.HandleFunc("POST /gate/dismiss", s.gateDismiss)
-	return s.gateGuard(mux)
+	mux.HandleFunc("GET /login", s.loginPage)
+	mux.HandleFunc("POST /login", s.loginSubmit)
+	mux.HandleFunc("POST /logout", s.logout)
+	// authGuard is outermost: it decides who may reach anything, then the gate
+	// layer (license notice) runs, then the app routes.
+	return s.authGuard(s.gateGuard(mux))
 }
 
 // table pulls and validates the table path segment; "" means already handled.
@@ -175,6 +187,7 @@ func (s *server) index(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "layout.html", map[string]any{
 		"Tables": s.cat.Tables, "Views": s.cat.Views, "DefaultView": s.cat.DefaultView,
 		"Banner": s.banner, "ReadOnly": s.api.ReadOnly(),
+		"Proxied": s.auth != nil && s.auth.proxied, "User": s.api.UserID,
 	})
 }
 

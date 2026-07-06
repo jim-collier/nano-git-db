@@ -10,6 +10,9 @@
 	{{if .Banner}}<div id="banner">{{.Banner}}</div>{{end}}
 	<div id="side">
 		<h1>ngdb</h1>
+		{{if .Proxied}}
+		<div id="whoami">{{.User}} <form method="post" action="/logout"><button type="submit">Sign out</button></form></div>
+		{{end}}
 		{{if .Views}}
 		<ul>
 		{{range .Views}}

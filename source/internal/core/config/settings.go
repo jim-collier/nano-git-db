@@ -18,8 +18,17 @@ const settingsFile = "settings.toml"
 // Settings is the user-global preferences record. Kept deliberately small - only
 // things that are the same across every database this user opens.
 type Settings struct {
-	Theme string `toml:"theme"` // TUI theme name; empty = the built-in default
+	Theme   string `toml:"theme"`    // TUI theme name; empty = the built-in default
+	WebMode string `toml:"web_mode"` // "local" (default) or "proxied"; see WebModeProxied
 }
+
+// WebModeProxied reports whether the web UI should require a login. It is the one
+// explicit switch between the two deployment shapes: "local" (default) auto-
+// identifies the single local user with no password; "proxied" requires a
+// username and password because the server sits behind a reverse proxy. Anything
+// but the exact word "proxied" is treated as local, so a typo fails safe toward
+// the passwordless-but-header-guarded local mode rather than a broken login wall.
+func (s *Settings) WebModeProxied() bool { return s.WebMode == "proxied" }
 
 func settingsPath() (string, error) {
 	base, err := UserBase()

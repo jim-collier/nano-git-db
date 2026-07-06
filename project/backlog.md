@@ -54,33 +54,16 @@ In each section, items are listed approximately from newest to oldest.
 
 ### New features and enhancements
 
-- 🛠️ Set up the folder hierarchy to separate and delineate the concerns decided in the "Misc to-do" above. (Possibly an additional new private repo?)
-	- Approach decided in the enterprise repo docs. Folder layout now in place: the repos are renamed and the additional private repo is created and scaffolded; the concern implementations follow in later phases.
-
-- ✅ Make opening menu look more like a menu. Better spacing around and in beteen items.
-	- Done: the startup picker is now a centred, bordered panel with margins instead of a full-screen list, and blank spacer rows sit between entries. Up/Down skip the spacers so the highlight only lands on real entries.
-
-- ✅ When defining a db in the TUI or CLI, allow just pointing to a top-level repo - then figure everything else out (i.e. "[repo dir]/ngdb/[short spaceless db name]/") If the dir is not a github repo, use the directory exactly as entered (assuming it's empty or nonexistent). Don't ask for txlog or config files, just create them in the dir.
-	- Done: the CLI `--init` already derived this; pulled the logic into shared `config.LogDirFor(location, name)` and switched the TUI create form to a single "location (repo or folder)" field. Point at a repo top level -> `<repo>/ngdb/<name>`; any other folder is used as-is (created if missing). No separate tx-log path to enter; config still auto-places in the user config dir.
-
-- ✅ Ability to delete entries from TUI (e.g. invalid ones).
-	- Done: in the startup picker, `d` (or Delete) on a database asks to remove it, then - only if it has files on disk - a second confirm offers to delete those too (default keep). Remove just deregisters (drops the registry record); delete also removes the tx-log dir and record dir. The `.ddl` schema is always kept. Broken `[!]` records are removable; read-only system records are not.
-
 - 🛠️ Enterprise license validation scheme. Commonly used, phones home to verify active, allows N copies simultaneously. But doesn't fail if can't phone home for some time. Doesn't bind to specific hardware or anything.
 	- Scheme decided in the enterprise repo (`research-license-validation.md`); implementation is a later phase.
 
-- ✅ Exe name should be 'ngdb'.
-	- Done: the built binary and all user-facing references (CLI/TUI/web usage, version line, web title) are now `ngdb`; `cmd/nanogitdb` renamed to `cmd/ngdb`. The module path `nano-git-db` and the `NANOGITDB_USER`/`NANOGITDB_HOST` env vars are unchanged.
-
-- 🔘 Web UI: basic login. The web server has no authentication today. Localhost binding is the only gate, and every request acts as one default user, so it cannot be safely exposed.
+- ✅ Web UI: basic login. The web server has no authentication today. Localhost binding is the only gate, and every request acts as one default user, so it cannot be safely exposed.
+	- Done: an explicit `web_mode` setting (default `local`) picks the shape. `local` identifies the single user with no password - the git repo account, else the OS user - and refuses to serve if a proxy header ever appears, so an accidentally exposed box never runs passwordless. `proxied` requires a login: a session cookie, checked against a local creds file of PBKDF2-hashed passwords (stdlib `crypto/pbkdf2`, no new dependency) kept outside the synced tree; the signed-in user drives the data layer so the existing user/group permissions apply. Add a login with the `webuser` verb. Stronger methods stay an enterprise concern.
 	- On a local machine, identify the user with no password. Use the git repository account name, or the operating system user when there is no repository.
 	- Behind a reverse proxy, require a username and password. The stronger methods belong to the enterprise edition.
 	- The signed-in user must reach the data layer, so the existing user and group permissions apply to the web view.
 	- Settle first how to tell a local machine apart from a proxied one, since a proxy also connects from localhost. Prefer an explicit setting over guessing.
 		- Decided (owner, 2026-07-04): explicit mode setting plus a header safety-net. A setting (e.g. `web_mode: local|proxied`, default `local`) is authoritative: `local` = auto-identify, no password; `proxied` = require username + password. Safety-net: if the setting is left at `local` but an incoming request carries a forwarded-for / proxy header, refuse to serve (or force login) so an accidental exposure can never run passwordless. Local identity resolves to the git repo account, else the OS user (reuse the existing default-user resolution). Still to design at build time: where proxied credentials live (a local credentials file outside the git-synced tree, bcrypt-hashed, is the likely answer since syncing password hashes via git is undesirable).
-
-- ✅ Order of fields in txlog should NOT affect backward or forward schema compatibility.
-	- Done: the reader maps columns by the header row's names instead of fixed positions. A column can be reordered, added, or dropped - an unknown extra column is ignored, a missing one defaults to empty (this subsumes the old host_name legacy-width special-case). Header rows are detected by their reserved column names, so even the header order can change. A record just needs enough fields to carry the required columns, else it's flagged torn.
 
 - 🛠️ Optional ability to store data encrypted in transaction log. (But always decrypted in user's local SQLite.)
 	- Done (phase 1, field-value encryption): new `internal/core/crypt` uses AES-256-GCM under a per-value subkey derived from the entry's unique tx_id, so nonce reuse can't happen at any record count. Only field values encrypt; every other column stays clear, since git merge and replay need them. Encryption happens on the write path and decryption just before replay; an undecryptable value binds NULL so ciphertext never reaches the view. All four front-ends inherit it. Verified end to end: sensitive data never appears in the synced log, replay with the key restores it, and without the key it shows empty and warns. Full design is in design.md.
@@ -139,6 +122,24 @@ In each section, items are listed approximately from newest to oldest.
 #### Done - Bugs
 
 #### Done - New features and enhancements
+
+- ✅ Exe name should be 'ngdb'.
+	- Done: the built binary and all user-facing references (CLI/TUI/web usage, version line, web title) are now `ngdb`; `cmd/nanogitdb` renamed to `cmd/ngdb`. The module path `nano-git-db` and the `NANOGITDB_USER`/`NANOGITDB_HOST` env vars are unchanged.
+
+- ✅ Order of fields in txlog should NOT affect backward or forward schema compatibility.
+	- Done: the reader maps columns by the header row's names instead of fixed positions. A column can be reordered, added, or dropped - an unknown extra column is ignored, a missing one defaults to empty (this subsumes the old host_name legacy-width special-case). Header rows are detected by their reserved column names, so even the header order can change. A record just needs enough fields to carry the required columns, else it's flagged torn.
+
+- ✅ Set up the folder hierarchy to separate and delineate the concerns decided in the "Misc to-do" above. (Possibly an additional new private repo?)
+	- Approach decided in the enterprise repo docs. Folder layout now in place: the repos are renamed and the additional private repo is created and scaffolded; the concern implementations follow in later phases.
+
+- ✅ Make opening menu look more like a menu. Better spacing around and in beteen items.
+	- Done: the startup picker is now a centred, bordered panel with margins instead of a full-screen list, and blank spacer rows sit between entries. Up/Down skip the spacers so the highlight only lands on real entries.
+
+- ✅ When defining a db in the TUI or CLI, allow just pointing to a top-level repo - then figure everything else out (i.e. "[repo dir]/ngdb/[short spaceless db name]/") If the dir is not a github repo, use the directory exactly as entered (assuming it's empty or nonexistent). Don't ask for txlog or config files, just create them in the dir.
+	- Done: the CLI `--init` already derived this; pulled the logic into shared `config.LogDirFor(location, name)` and switched the TUI create form to a single "location (repo or folder)" field. Point at a repo top level -> `<repo>/ngdb/<name>`; any other folder is used as-is (created if missing). No separate tx-log path to enter; config still auto-places in the user config dir.
+
+- ✅ Ability to delete entries from TUI (e.g. invalid ones).
+	- Done: in the startup picker, `d` (or Delete) on a database asks to remove it, then - only if it has files on disk - a second confirm offers to delete those too (default keep). Remove just deregisters (drops the registry record); delete also removes the tx-log dir and record dir. The `.ddl` schema is always kept. Broken `[!]` records are removable; read-only system records are not.
 
 - ✅ Startup:
 	- ✅ If the program is run from an active directory that has a DDL, use that one.

@@ -18,3 +18,11 @@ button { margin-right: 0.3em; }
 #gate { max-width: 30em; margin: 6em auto; text-align: center; }
 #gate .gate-msg { color: #444; margin: 1em 0 1.5em; }
 #gate button { margin: 0.4em; padding: 0.5em 1em; }
+#login { max-width: 20em; margin: 6em auto; }
+#login h1 { text-align: center; }
+#login label { display: block; margin: 0.6em 0; }
+#login input { width: 100%; min-width: 0; box-sizing: border-box; }
+#login .login-error { color: #b00; }
+#whoami { color: #9ab; font-size: 0.85em; margin-bottom: 0.8em; }
+#whoami form { display: inline; }
+#whoami button { margin: 0; padding: 0 0.4em; font-size: 0.85em; }
