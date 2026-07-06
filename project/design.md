@@ -298,6 +298,8 @@ The web tier binds `127.0.0.1` only, so on a single machine the loopback binding
 
 `--donate` and the TUI/web Donate screens list the project's donation channels - crypto addresses and links (GitHub Sponsors, Liberapay). Each is a `{label, kind, value}` entry in one small source file; the front-ends only display them.
 
+It is an open-source-only feature: `donate` is a top-level seam with an `Enabled` switch, and the enterprise (commercial) build turns it off before dispatch, so the paid product carries no `--donate` flag or Donate screen.
+
 The addresses are the maintainer's, so the question the feature raises is how to keep them from being quietly changed to someone else's. They ship as placeholders that render as "not yet configured" and cannot be copied, so a release can never ask for donations to nothing - that covers an honest mistake. Against a deliberate swap by someone who can edit the source, the address table is signed: a detached signature made with a key held outside the repository, and a check in the test stage refuses to proceed unless the current table still matches that signature. A changed address that has not been re-signed cannot reach a release. The addresses stay visible - they are meant to be seen; what the signature protects is that they are the maintainer's and not a substitute. The verification anchors on a trust file kept outside the source tree, so an edit cannot swap the key along with the address. The gate skips harmlessly while the table is still placeholders, or on a machine without the key. The operational detail lives in `cicd/donation-signing.md`.
 
 ### Encrypted transaction log

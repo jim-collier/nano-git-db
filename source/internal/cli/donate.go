@@ -8,7 +8,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/jim-collier/nano-git-db/internal/core/donate"
+	"github.com/jim-collier/nano-git-db/donate"
 )
 
 // Donate prints the project's donation targets. No database is involved.

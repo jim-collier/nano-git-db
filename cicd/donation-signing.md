@@ -1,12 +1,12 @@
 # Donation address signing
 
-`--donate` and the TUI/web Donate screens show donation addresses from `source/internal/core/donate/donate.go`. Anyone can edit that file, so the table is signed: the test gate fails unless it carries a valid signature made with the maintainer's key. A changed address that is not re-signed fails the gate, so a stray or malicious edit cannot quietly redirect donations in a release.
+`--donate` and the TUI/web Donate screens show donation addresses from `source/donate/donate.go`. Anyone can edit that file, so the table is signed: the test gate fails unless it carries a valid signature made with the maintainer's key. A changed address that is not re-signed fails the gate, so a stray or malicious edit cannot quietly redirect donations in a release.
 
 ## What lives where
 
 - **Private signing key** - `../private/donation_keys/donation_ed25519`, outside the repo (that tree is cloud-synced, so the key is passphrase-protected and only ever stored encrypted). Never commit it.
 - **Trust anchor** - `../private/donation_keys/allowed_signers`, also outside the repo. The gate reads the public key from here, not from the repo, so a pull request cannot swap the key along with an address.
-- **Signature** - `source/internal/core/donate/donation.sig`, committed next to `donate.go`.
+- **Signature** - `source/donate/donation.sig`, committed next to `donate.go`.
 - **Signed content** - `donate.CanonicalBytes()`: the label, kind and value of every entry, in order. Reordering or editing the table changes these bytes and invalidates the signature.
 
 ## Generate the key (one time)
@@ -21,13 +21,13 @@ Use a strong passphrase (the folder is cloud-synced), and back it up - without i
 
 ## Set addresses and sign
 
-1. Replace the `PLACEHOLDER_*` values in `source/internal/core/donate/donate.go` with the real addresses/URLs.
+1. Replace the `PLACEHOLDER_*` values in `source/donate/donate.go` with the real addresses/URLs.
 2. Sign: `cicd/sign-donations.bash` (prompts for the passphrase; writes `donation.sig`).
 3. Commit `donate.go` and `donation.sig` together.
 
 ## How the gate works
 
-`internal/core/donate` has a `go test` (`TestDonationTableSigned`) that runs in the gating cicd test stage. It:
+`donate` has a `go test` (`TestDonationTableSigned`) that runs in the gating cicd test stage. It:
 
 - skips while every address is still a placeholder (nothing to protect yet);
 - skips when `ssh-keygen` or the trust anchor is absent (e.g. a fresh clone without the key dir), so it never breaks a contributor's test run;

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Sign the donation address table so the build can detect tampering. The signature
 # covers donate.CanonicalBytes() - the label, kind and value of every entry in
-# internal/core/donate/donate.go, in order - and the go-test gate re-checks it
+# source/donate/donate.go, in order - and the go-test gate re-checks it
 # against the out-of-repo trust anchor. Run this after editing the addresses; only
 # the private-key holder can produce a signature that verifies, so a changed
 # address that was not re-signed fails the gate. See cicd/donation-signing.md.
@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."  ## repo root; this script lives in cicd/
 
 # Key lives outside the repo (passphrase-protected; ssh-keygen prompts for it).
 key="${DONATION_SIGNING_KEY:-../private/donation_keys/donation_ed25519}"
-sig="source/internal/core/donate/donation.sig"
+sig="source/donate/donation.sig"
 namespace="donation"
 
 [[ -f "$key" ]] || {

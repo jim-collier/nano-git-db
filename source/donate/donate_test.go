@@ -58,8 +58,9 @@ func TestDonationTableSigned(t *testing.T) {
 	pkgDir := filepath.Dir(thisFile)
 	anchor := os.Getenv("NGDB_DONATION_ALLOWED_SIGNERS")
 	if anchor == "" {
-		// pkgDir up to the project root (the dir holding github_floss/ + private/).
-		anchor = filepath.Join(pkgDir, "..", "..", "..", "..", "..", "private", "donation_keys", "allowed_signers")
+		// pkgDir (source/donate) up to the project root (the dir holding
+		// github_floss/ + private/): donate -> source -> github_floss -> project.
+		anchor = filepath.Join(pkgDir, "..", "..", "..", "private", "donation_keys", "allowed_signers")
 	}
 	if _, err := os.Stat(anchor); err != nil {
 		t.Skipf("donation trust anchor not present (%s) - cannot verify here", anchor)

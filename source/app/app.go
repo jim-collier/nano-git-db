@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jim-collier/nano-git-db/donate"
 	"github.com/jim-collier/nano-git-db/enc"
 	"github.com/jim-collier/nano-git-db/internal/cli"
 	"github.com/jim-collier/nano-git-db/internal/core/config"
@@ -83,7 +84,12 @@ func Run(args []string) error {
 	}
 	switch mode {
 	case "--donate":
-		return cli.Donate()
+		// Donate is an open-source-only feature; the enterprise build disables it
+		// (donate.Enabled = false), so there the flag just falls through to usage.
+		if donate.Enabled {
+			return cli.Donate()
+		}
+		return cli.Run(args)
 	case "--tui":
 		return tui.Run(args[1:])
 	case "--serve":
