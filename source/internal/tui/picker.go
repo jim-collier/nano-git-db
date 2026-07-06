@@ -11,6 +11,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
+	"github.com/jim-collier/nano-git-db/donate"
 	"github.com/jim-collier/nano-git-db/internal/core/config"
 )
 
@@ -172,8 +173,10 @@ func (p *picker) populate() {
 	}
 	entries = append(entries,
 		entry{"Create new database", "register a new database and open it", p.createForm, nil},
-		entry{"Open existing ...", "open a DDL + tx-log without registering", p.openForm, nil},
-		entry{"Donate", "support nano-git-db development", p.donateModal, nil})
+		entry{"Open existing ...", "open a DDL + tx-log without registering", p.openForm, nil})
+	if donate.Enabled { // open-source-only feature
+		entries = append(entries, entry{"Donate", "support nano-git-db development", p.donateModal, nil})
+	}
 	for i, ent := range entries {
 		if i > 0 {
 			p.list.AddItem("", "", 0, nil)

@@ -31,6 +31,12 @@ const SignatureNamespace = "donation"
 // Intro is the one-line appeal shown above the targets in every front-end.
 const Intro = "If you find nano-git-db useful, please consider donating."
 
+// Enabled is the master switch for the whole Donate feature. The open-source build
+// leaves it on; the enterprise (commercial) build turns it off before dispatch -
+// you do not ask a paying customer to donate. It gates --donate and the TUI/web
+// entries, so a disabled build shows no trace of the feature.
+var Enabled = true
+
 // Target is one donation channel: a human label, a kind ("crypto" for an address
 // or "link" for a URL), and the value.
 type Target struct {

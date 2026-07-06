@@ -10,7 +10,7 @@ package main
 import (
 	"os"
 
-	"github.com/jim-collier/nano-git-db/internal/core/donate"
+	"github.com/jim-collier/nano-git-db/donate"
 )
 
 func main() {

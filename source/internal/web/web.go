@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jim-collier/nano-git-db/donate"
 	"github.com/jim-collier/nano-git-db/gate"
 	"github.com/jim-collier/nano-git-db/internal/core/config"
 	"github.com/jim-collier/nano-git-db/internal/core/crud"
@@ -149,7 +150,9 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /v/{view}", s.viewPage)
 	mux.HandleFunc("GET /v/{view}/b/{i}/rows", s.viewBlockRows)
 	mux.HandleFunc("GET /v/{view}/q", s.viewQuery)
-	mux.HandleFunc("GET /donate", s.donate)
+	if donate.Enabled { // open-source-only feature
+		mux.HandleFunc("GET /donate", s.donate)
+	}
 	mux.HandleFunc("GET /t/{table}", s.rows)
 	mux.HandleFunc("GET /t/{table}/new", s.form)
 	mux.HandleFunc("GET /t/{table}/{id}/edit", s.form)
@@ -189,6 +192,7 @@ func (s *server) index(w http.ResponseWriter, r *http.Request) {
 		"Tables": s.cat.Tables, "Views": s.cat.Views, "DefaultView": s.cat.DefaultView,
 		"Banner": s.banner, "ReadOnly": s.api.ReadOnly(),
 		"Proxied": s.auth != nil && s.auth.proxied, "User": s.api.UserID,
+		"Donate": donate.Enabled,
 	})
 }
 

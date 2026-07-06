@@ -25,7 +25,7 @@
 			<li><a href="#" hx-get="/t/{{.}}" hx-target="#main">{{.}}</a></li>
 		{{end}}
 		</ul>
-		<p id="donatelink"><a href="#" hx-get="/donate" hx-target="#main">Donate</a></p>
+		{{if .Donate}}<p id="donatelink"><a href="#" hx-get="/donate" hx-target="#main">Donate</a></p>{{end}}
 	</div>
 	<div id="main">
 		{{if .DefaultView}}

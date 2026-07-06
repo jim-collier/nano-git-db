@@ -6,7 +6,7 @@ package web
 import (
 	"net/http"
 
-	"github.com/jim-collier/nano-git-db/internal/core/donate"
+	"github.com/jim-collier/nano-git-db/donate"
 )
 
 // donate renders the donation targets partial into #main. Unconfigured targets
