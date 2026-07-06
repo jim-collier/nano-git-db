@@ -1,0 +1,16 @@
+<div id="donate">
+	<h2>Donate</h2>
+	<p>{{.Intro}}</p>
+	<ul>
+	{{range .Targets}}
+		<li>
+			<span class="label">{{.Label}}</span>
+			{{if .Configured}}
+				{{if eq .Kind "link"}}<a href="{{.Value}}" target="_blank" rel="noopener noreferrer">{{.Value}}</a>{{else}}<code>{{.Value}}</code>{{end}}
+			{{else}}
+				<span class="pending">not yet configured</span>
+			{{end}}
+		</li>
+	{{end}}
+	</ul>
+</div>

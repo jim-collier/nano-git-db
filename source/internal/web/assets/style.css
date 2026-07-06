@@ -26,3 +26,10 @@ button { margin-right: 0.3em; }
 #whoami { color: #9ab; font-size: 0.85em; margin-bottom: 0.8em; }
 #whoami form { display: inline; }
 #whoami button { margin: 0; padding: 0 0.4em; font-size: 0.85em; }
+#donatelink { margin-top: 1.2em; }
+#donate { max-width: 40em; }
+#donate ul { list-style: none; padding: 0; }
+#donate li { margin: 0.6em 0; }
+#donate .label { display: block; font-weight: bold; }
+#donate code { background: #f2f2f2; padding: 0.15em 0.4em; word-break: break-all; }
+#donate .pending { color: #888; font-style: italic; }

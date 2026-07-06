@@ -172,7 +172,8 @@ func (p *picker) populate() {
 	}
 	entries = append(entries,
 		entry{"Create new database", "register a new database and open it", p.createForm, nil},
-		entry{"Open existing ...", "open a DDL + tx-log without registering", p.openForm, nil})
+		entry{"Open existing ...", "open a DDL + tx-log without registering", p.openForm, nil},
+		entry{"Donate", "support nano-git-db development", p.donateModal, nil})
 	for i, ent := range entries {
 		if i > 0 {
 			p.list.AddItem("", "", 0, nil)

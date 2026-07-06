@@ -149,6 +149,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /v/{view}", s.viewPage)
 	mux.HandleFunc("GET /v/{view}/b/{i}/rows", s.viewBlockRows)
 	mux.HandleFunc("GET /v/{view}/q", s.viewQuery)
+	mux.HandleFunc("GET /donate", s.donate)
 	mux.HandleFunc("GET /t/{table}", s.rows)
 	mux.HandleFunc("GET /t/{table}/new", s.form)
 	mux.HandleFunc("GET /t/{table}/{id}/edit", s.form)

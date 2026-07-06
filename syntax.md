@@ -349,6 +349,7 @@ ngdb <verb> ...            CLI (above)
 ngdb --tui  <ddl> <sqlite> <logdir>          terminal UI
 ngdb --serve <ddl> <sqlite> <logdir>         local web UI on 127.0.0.1:8765
 ngdb --script <file.lua> <ddl> <sqlite> <logdir>   run a Lua script (enterprise build)
+ngdb --donate                                show the project's donation addresses
 ngdb --version                               print the version and exit (also -v)
 ```
 
