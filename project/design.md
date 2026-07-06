@@ -277,6 +277,14 @@ v1 semantics (everything is open until a DDL populates a list):
 - Write enforcement is in the core CRUD API (all front-ends inherit it): table write/delete rules, field write rules on the touched fields, and - for row_level_access tables - the row's access_rows grants (a granted row needs a shared group; ungranted rows are open).
 - Read enforcement is UI-level, computed at catalog build since a process serves one user: unreadable tables vanish from the UIs (with a warning), unreadable fields drop out of grids and forms silently, a view is hidden when its flat access rule fails or its main (first) table is unreadable, and row-granted rows the user lacks are filtered from grids. Raw `query` (CLI/Lua/SQL) is not row/table-gated - the local file is the trust boundary; the write path is the hard gate.
 
+### Startup notice and read-only mode
+
+Two small, general-purpose pieces the core provides so an edition can surface a notice at startup without the core knowing anything about why:
+
+- A neutral `gate` seam, the same open-core shape as the encryption and scripting seams. It carries only a posture, a message, and an optional wait - Full (run normally), Nag (run, but show the message as a banner), or Blocking (hold on a start screen the user either waits out or dismisses). The core knows how to draw those three; it never learns what drives them.
+- A generic read-only session flag in the core write funnel: one guard on the single commit path every write goes through, so setting it makes every front-end (CLI, TUI, web) refuse writes while reads keep working. A dismissed Blocking notice lands here.
+- The open-source build registers no provider, so the seam always reports Full and the app runs unimpeded. Among the ways to shape this, it was decided to keep the seam neutral and put only the rendering here: any decision logic an edition adds lives on its side, never in the readable public core.
+
 ### Encrypted transaction log
 
 Optional at-rest encryption so the git-synced log is unreadable to the hosting provider or anyone who obtains the repo. The local SQLite view always holds cleartext (decrypted at replay), so queries, indexes, and uniques are unaffected.
