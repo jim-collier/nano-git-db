@@ -26,22 +26,27 @@ import (
 // current directory, else shows the registry picker (choose / create / open).
 func Run(args []string) error {
 	applyTheme(themeIndexByName(config.LoadSettings().Theme)) // so the picker is themed too
+	dec := runGate(nil)
+	if !dec.proceed { // quit at the startup notice
+		return nil
+	}
 	if len(args) >= 3 {
-		return runOpen(args[0], args[1], args[2], nil)
+		return runOpen(args[0], args[1], args[2], nil, dec)
 	}
 	if ddlPath, sqlitePath, logDir, ok := config.PWDTriple(); ok {
-		return runOpen(ddlPath, sqlitePath, logDir, nil)
+		return runOpen(ddlPath, sqlitePath, logDir, nil, dec)
 	}
 	res, err := pickDatabase(nil)
 	if err != nil || res == nil { // nil result = user quit the picker
 		return err
 	}
-	return runOpen(res.ddlPath, res.sqlitePath, res.logDir, res.cfg)
+	return runOpen(res.ddlPath, res.sqlitePath, res.logDir, res.cfg, dec)
 }
 
 // runOpen brings up one database and runs the main UI over it. cfg, when set
-// (a registry pick), is stamped with the open time.
-func runOpen(ddlPath, sqlitePath, logDir string, cfg *config.DBConfig) error {
+// (a registry pick), is stamped with the open time. dec carries the startup
+// notice outcome: an optional banner and whether to open read-only.
+func runOpen(ddlPath, sqlitePath, logDir string, cfg *config.DBConfig, dec gateDecision) error {
 	keyFile, pref := config.ResolveEncryption(ddlPath, cfg)
 	client, err := schema.OpenClientWith(schema.OpenOpts{
 		DDLPath: ddlPath, DBPath: sqlitePath, LogDir: logDir, KeyFile: keyFile, EncryptPref: pref,
@@ -68,6 +73,8 @@ func runOpen(ddlPath, sqlitePath, logDir string, cfg *config.DBConfig) error {
 	if err != nil {
 		return err
 	}
+	app.banner = dec.banner
+	app.api.SetReadOnly(dec.readOnly)
 	app.cat.Queries = client.Queries
 	// stderr: the alternate screen is about to cover stdout, and these should
 	// survive in the scrollback / a redirect after quit.
@@ -95,6 +102,7 @@ type App struct {
 	curView  *schema.ViewSpec    // open view (mutually exclusive with cur), else nil
 	rows     []map[string]string // rows behind the grid, index = grid row-1
 	themeIdx int
+	banner   string // startup-notice banner shown atop the UI, empty = none
 }
 
 // NewApp builds the UI over an API. Schemas supply table order and editable
@@ -202,8 +210,13 @@ func (a *App) buildUI() {
 	main := tview.NewFlex().
 		AddItem(a.list, 24, 0, true).
 		AddItem(a.grid, 0, 1, false)
-	root := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(main, 0, 1, true).
+	root := tview.NewFlex().SetDirection(tview.FlexRow)
+	if a.banner != "" {
+		bannerView := tview.NewTextView().SetDynamicColors(true).
+			SetText("[black:yellow] " + a.banner + " [-:-]")
+		root.AddItem(bannerView, 1, 0, false)
+	}
+	root.AddItem(main, 0, 1, true).
 		AddItem(a.status, 1, 0, false)
 	a.pages.AddPage("main", root, true, true)
 
