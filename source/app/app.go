@@ -82,6 +82,8 @@ func Run(args []string) error {
 		return cli.Init(rest)
 	}
 	switch mode {
+	case "--donate":
+		return cli.Donate()
 	case "--tui":
 		return tui.Run(args[1:])
 	case "--serve":

@@ -54,6 +54,10 @@ In each section, items are listed approximately from newest to oldest.
 
 ### New features and enhancements
 
+- ✅ Donate feature, with protected donation addresses (open-source build). List donation crypto addresses and URLs from CLI (`--donate`), TUI, and web.
+	- Done: a `donate` package holds a fixed-order `{label, kind, value}` table shown by `--donate`, a TUI picker entry, and a web Donate page. Ships as placeholders that read "not yet configured" until the real values are filled in.
+	- Done: the table is protected against a swapped address the way the sister project does it - a detached ed25519 signature (`ssh-keygen`) over the canonical table, with the signing key and trust anchor kept outside the repo, re-checked by a test gate that skips on placeholders or a keyless machine. Sign with `cicd/sign-donations.bash`; details in `cicd/donation-signing.md`.
+
 - 🛠️ Enterprise license validation scheme. Commonly used, phones home to verify active, allows N copies simultaneously. But doesn't fail if can't phone home for some time. Doesn't bind to specific hardware or anything.
 	- Scheme decided in the enterprise repo (`research-license-validation.md`); implementation is a later phase.
 
