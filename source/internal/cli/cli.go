@@ -315,6 +315,7 @@ func openAPI(paths []string) (*store.Store, *crud.API, error) {
 	for _, w := range attachWarns {
 		fmt.Fprintln(os.Stderr, "warning:", w)
 	}
+	applyGate(api, os.Stderr)
 	return st, api, nil
 }
 

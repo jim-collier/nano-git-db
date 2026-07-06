@@ -60,6 +60,11 @@ type API struct {
 	// Trigger, when set by the scripting host, fires around every write (trigger.go).
 	Trigger Trigger
 
+	// readOnly, when set, makes every write return ErrReadOnly while reads keep
+	// working. A front-end flips it on to degrade a session to read-only (e.g. a
+	// dismissed startup notice); the core itself never sets it.
+	readOnly bool
+
 	// Encryption state (crypt.go). cipher is the enterprise field-value cipher
 	// (nil = none, and always nil in the open-source build); encPref is the
 	// local on|off|auto preference; encSchema supplies the DDL always|never|auto
@@ -74,6 +79,16 @@ type API struct {
 func New(st *store.Store, lg *txlog.Log) *API {
 	return &API{st: st, log: lg, HostID: DefaultHostID()}
 }
+
+// ErrReadOnly is what every write returns while the API is in read-only mode.
+var ErrReadOnly = fmt.Errorf("crud: database is open read-only")
+
+// SetReadOnly turns read-only mode on or off. A front-end sets it when a session
+// is degraded to read-only; writes then return ErrReadOnly and reads keep going.
+func (a *API) SetReadOnly(ro bool) { a.readOnly = ro }
+
+// ReadOnly reports whether the API is in read-only mode.
+func (a *API) ReadOnly() bool { return a.readOnly }
 
 // DefaultUserID is the stamp when a front-end has nothing better:
 // NANOGITDB_USER, else the OS username.
@@ -259,6 +274,9 @@ func (a *API) QueryRows(query string, args ...any) ([]string, []map[string]strin
 func (a *API) commit(entries []txlog.Entry) error {
 	if len(entries) == 0 {
 		return nil
+	}
+	if a.readOnly {
+		return ErrReadOnly
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()

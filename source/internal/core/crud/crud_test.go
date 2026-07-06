@@ -87,6 +87,48 @@ func TestCreateGetUpdateDelete(t *testing.T) {
 	}
 }
 
+func TestReadOnlyBlocksWrites(t *testing.T) {
+	a, _, _ := newAPI(t)
+	id, err := a.Create("person", map[string]string{"name": "Ann", "age": "30"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a.SetReadOnly(true)
+	if !a.ReadOnly() {
+		t.Fatal("ReadOnly() should be true")
+	}
+	// Every write path funnels through commit, so all of them refuse.
+	if _, err := a.Create("person", map[string]string{"name": "Bo"}); err != ErrReadOnly {
+		t.Fatalf("Create in read-only = %v, want ErrReadOnly", err)
+	}
+	if err := a.Update("person", id, map[string]string{"name": "Anne"}); err != ErrReadOnly {
+		t.Fatalf("Update in read-only = %v, want ErrReadOnly", err)
+	}
+	if err := a.SetField("person", id, "age", "31"); err != ErrReadOnly {
+		t.Fatalf("SetField in read-only = %v, want ErrReadOnly", err)
+	}
+	if err := a.MarkDelete("person", id); err != ErrReadOnly {
+		t.Fatalf("MarkDelete in read-only = %v, want ErrReadOnly", err)
+	}
+	if err := a.Delete("person", id); err != ErrReadOnly {
+		t.Fatalf("Delete in read-only = %v, want ErrReadOnly", err)
+	}
+	// Reads keep working, and nothing changed.
+	if m, ok, _ := a.Get("person", id); !ok || m["name"] != "Ann" || m["age"] != "30" {
+		t.Fatalf("read-only mutated the row: %+v ok=%v", m, ok)
+	}
+
+	// Clearing it restores writes.
+	a.SetReadOnly(false)
+	if err := a.Update("person", id, map[string]string{"name": "Anne"}); err != nil {
+		t.Fatalf("Update after clearing read-only: %v", err)
+	}
+	if m, _, _ := a.Get("person", id); m["name"] != "Anne" {
+		t.Fatalf("write after clear didn't land: %+v", m)
+	}
+}
+
 func TestWritesStampHost(t *testing.T) {
 	a, logDir, _ := newAPI(t)
 	a.HostID = "box-x"

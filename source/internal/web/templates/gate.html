@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>ngdb</title>
+	<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+	<div id="gate">
+		<h1>ngdb</h1>
+		<p class="gate-msg">{{.Message}}</p>
+		<form method="post" action="/gate/continue">
+			<button id="gate-continue" type="submit" {{if gt .Remaining 0}}disabled{{end}}>Continue with read/write<span id="gate-wait">{{if gt .Remaining 0}} ({{.Remaining}}s){{end}}</span></button>
+		</form>
+		<form method="post" action="/gate/dismiss">
+			<button type="submit">Continue read-only</button>
+		</form>
+	</div>
+	<script>
+	(function () {
+		var remaining = {{.Remaining}};
+		if (remaining <= 0) return;
+		var btn = document.getElementById('gate-continue');
+		var wait = document.getElementById('gate-wait');
+		var t = setInterval(function () {
+			remaining--;
+			if (remaining <= 0) {
+				clearInterval(t);
+				btn.disabled = false;
+				wait.textContent = '';
+			} else {
+				wait.textContent = ' (' + remaining + 's)';
+			}
+		}, 1000);
+	})();
+	</script>
+</body>
+</html>

@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jim-collier/nano-git-db/gate"
 	"github.com/jim-collier/nano-git-db/internal/core/config"
 	"github.com/jim-collier/nano-git-db/internal/core/crud"
 	"github.com/jim-collier/nano-git-db/internal/core/schema"
@@ -83,6 +84,7 @@ func Run(args []string) error {
 	if err != nil {
 		return err
 	}
+	srv.applyGate(gate.Evaluate())
 
 	stop := client.StartAutoSync(client.Schema.TunableInt("git_sync_frequency", 60),
 		func(warning string) { fmt.Println("warning:", warning) })
@@ -107,6 +109,13 @@ type server struct {
 	api *crud.API
 	cat *schema.Catalog
 	tpl *template.Template
+
+	// startup-notice state (gate.go). now is injectable for tests.
+	now      func() time.Time
+	gated    bool      // holding on the start screen until continue/dismiss
+	unlockAt time.Time // read/write is withheld until this time
+	gateMsg  string    // message shown on the start screen and banner
+	banner   string    // non-empty -> a banner bar in the layout
 }
 
 func newServer(api *crud.API, cat *schema.Catalog) (*server, error) {
@@ -122,7 +131,7 @@ func newServer(api *crud.API, cat *schema.Catalog) (*server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &server{api: api, cat: cat, tpl: tpl}, nil
+	return &server{api: api, cat: cat, tpl: tpl, now: time.Now}, nil
 }
 
 func (s *server) routes() http.Handler {
@@ -141,7 +150,9 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /t/{table}/{id}/delete", s.del)
 	mux.HandleFunc("POST /t/{table}/{id}/comment", s.comment)
 	mux.HandleFunc("POST /t/{table}/{id}/attach", s.attach)
-	return mux
+	mux.HandleFunc("POST /gate/continue", s.gateContinue)
+	mux.HandleFunc("POST /gate/dismiss", s.gateDismiss)
+	return s.gateGuard(mux)
 }
 
 // table pulls and validates the table path segment; "" means already handled.
@@ -163,6 +174,7 @@ func (s *server) render(w http.ResponseWriter, name string, data any) {
 func (s *server) index(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "layout.html", map[string]any{
 		"Tables": s.cat.Tables, "Views": s.cat.Views, "DefaultView": s.cat.DefaultView,
+		"Banner": s.banner, "ReadOnly": s.api.ReadOnly(),
 	})
 }
 
