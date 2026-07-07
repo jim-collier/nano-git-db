@@ -54,9 +54,20 @@ In each section, items are listed approximately from newest to oldest.
 
 ### New features and enhancements
 
-- ✅ Donate feature, with protected donation addresses (open-source build). List donation crypto addresses and URLs from CLI (`--donate`), TUI, and web.
-	- Done: a `donate` package holds a fixed-order `{label, kind, value}` table shown by `--donate`, a TUI picker entry, and a web Donate page. Ships as placeholders that read "not yet configured" until the real values are filled in.
-	- Done: the table is protected against a swapped address the way the sister project does it - a detached ed25519 signature (`ssh-keygen`) over the canonical table, with the signing key and trust anchor kept outside the repo, re-checked by a test gate that skips on placeholders or a keyless machine. Sign with `cicd/sign-donations.bash`; details in `cicd/donation-signing.md`.
+- 🛠️ Donations model:
+	- ✅ "Support nano-git-db" button in Help|About (or `--donate`), showing the URL it opens. The `donate` package holds one blurb + one link (DONATE.md); CLI prints the blurb and URL line-spaced, TUI shows a dialog, web shows a Support page. Open-source-only (enterprise turns `donate.Enabled` off).
+	- 🛠️ `## Support nano-git-db` section in README.md - section added (scaffolded with our own copy; paste SilkTerm's exact wording if preferred).
+	- 🛠️ `DONATE.md` - added (scaffolded with our own copy; paste SilkTerm's if preferred).
+	- ✅ `.github/FUNDING.yml` - added (custom link to DONATE.md live; platform handles commented, see FYI).
+	- ✅ Locked with `.github/CODEOWNERS`:
+		- ✅ Isolated Help|About dialog TUI, web UI, CLI code file (each front-end's donate.go + the `donate` package + donate.html, all listed in CODEOWNERS).
+		- ✅ /.github/CODEOWNERS  @jim-collier
+		- ✅ /DONATE.md  @jim-collier
+		- ✅ /.github/FUNDING.yml  @jim-collier
+	- ✅ Remove ssh signing keys model (for now) - dropped the signed-address-table code (canonical bytes, signer script, ops doc, test gate); the deferred idea is kept under Defer below.
+	- FYI to-do (owner):
+		- Enable a GitHub Sponsors profile for the Sponsor badge/link to go live (else it 404s)
+		- fill in `.github/FUNDING.yml` handles.
 
 - 🛠️ Enterprise license validation scheme. Commonly used, phones home to verify active, allows N copies simultaneously. But doesn't fail if can't phone home for some time. Doesn't bind to specific hardware or anything.
 	- Scheme decided in the enterprise repo (`research-license-validation.md`); implementation is a later phase.
@@ -252,4 +263,17 @@ In each section, items are listed approximately from newest to oldest.
 
 - ✋ macOS build target - needs a Mac/SDK
 
+- ✋ Make signing keys required to edit "about" modal with link to DONATE.md (that in turn has CODEOWNER):
+
+	~~~bash
+	project="PROJECT"; mkdir -p private/donation_keys; chmod 700 private/donation_keys
+	ssh-keygen -t ed25519 -C "${PROJECT} donation signing" -f private/donation_keys/donation_ed25519
+	cat private/donation_keys/donation_ed25519.pub | ct
+	cat private/donation_keys/donation_ed25519 | ct
+	~~~
+
 ### Canceled
+
+- 🚫 Donate feature, with protected donation addresses (open-source build). List donation crypto addresses and URLs from CLI (`--donate`), TUI, and web.
+	- Done: a `donate` package holds a fixed-order `{label, kind, value}` table shown by `--donate`, a TUI picker entry, and a web Donate page. Ships as placeholders that read "not yet configured" until the real values are filled in.
+	- Done: the table is protected against a swapped address the way the sister project does it - a detached ed25519 signature (`ssh-keygen`) over the canonical table, with the signing key and trust anchor kept outside the repo, re-checked by a test gate that skips on placeholders or a keyless machine. Sign with `cicd/sign-donations.bash`; details in `cicd/donation-signing.md`.

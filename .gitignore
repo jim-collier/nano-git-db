@@ -12,7 +12,7 @@
 # Test/coverage
 *.out
 
-# Donation signing key: lives outside the repo (../private/donation_keys/); never
-# let a stray copy land in git. The detached signature (donation.sig) is tracked.
+# Donation signing keys live outside the repo (../private/donation_keys/); never
+# let a stray copy land in git.
 donation_ed25519
 donation_keys/
