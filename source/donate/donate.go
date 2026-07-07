@@ -53,11 +53,13 @@ func (t Target) Configured() bool { return !strings.HasPrefix(t.Value, placehold
 // it is part of what the signature covers.
 var Targets = []Target{
 	{"Bitcoin (BTC)", "crypto", "PLACEHOLDER_BTC_ADDRESS"},
+	{"Monero (XMR)", "crypto", "PLACEHOLDER_XMR_ADDRESS"},
 	{"Ethereum (ETH)", "crypto", "PLACEHOLDER_ETH_ADDRESS"},
 	{"USD Coin (USDC)", "crypto", "PLACEHOLDER_USDC_ADDRESS"},
-	{"Monero (XMR)", "crypto", "PLACEHOLDER_XMR_ADDRESS"},
 	{"GitHub Sponsors", "link", "PLACEHOLDER_GITHUB_SPONSORS_URL"},
 	{"Liberapay", "link", "PLACEHOLDER_LIBERAPAY_URL"},
+	{"Ko-fi", "link", "PLACEHOLDER_KOFI_URL"},
+	{"Patreon", "link", "PLACEHOLDER_PATREON_URL"},
 }
 
 // HasConfigured reports whether at least one real address/URL is set - i.e. there
