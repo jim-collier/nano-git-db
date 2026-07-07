@@ -22,4 +22,4 @@ const Intro = "If you find nano-git-db useful, please consider supporting its de
 
 // URL is the page the front-ends open (or print): the project's DONATE.md, which
 // lists every way to help.
-const URL = "https://github.com/jim-collier/nano-git-db/blob/main/DONATE.md"
+const URL = "https://github.com/jim-collier/nano-git-db/blob/HEAD/DONATE.md"

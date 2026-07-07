@@ -1,11 +1,22 @@
 # Support nano-git-db
 
-nano-git-db is free and open source under the AGPL, built and maintained in the open. If it saves you time or effort, please consider supporting its continued development.
+nano-git-db is written and maintained by one programmer in his spare time. If you like this thing, use it often, and/or it saves you time - sponsoring it keeps it moving!
 
-## Ways to help
+Even a few dollars a month is meaningful. Or just buy me a coffee.
 
-- **Sponsor** - back the project through [GitHub Sponsors](https://github.com/sponsors/jim-collier) or another platform listed on the repo's Sponsor button.
-- **Star and share** - star the repository and tell others who might find it useful. Visibility helps as much as anything.
-- **Contribute** - report bugs, suggest features, or send a pull request. See [contributing.md](contributing.md).
+## Direct support
 
-Every bit keeps the project active and moving. Thank you.
+- [GitHub Sponsors](https://github.com/sponsors/jim-collier)
+
+## Indirect support
+
+- Star the repo.
+- File good bug reports and feature requests.
+
+## Get the word out
+
+Most importantly: Tell other developers and teams on various socials how this has changed your life:
+
+- [r/git](https://www.reddit.com/r/git/)
+- [Hacker News](news.ycombinator.com)
+- [r/selfhosted](https://www.reddit.com/r/selfhosted/)

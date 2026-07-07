@@ -302,7 +302,26 @@ The complete DDL, sidecar-file (named queries, triggers), CLI, run-mode, access-
 
 ## Support nano-git-db
 
-nano-git-db is free and open source. If it is useful to you, please consider supporting its development - see [DONATE.md](DONATE.md) for ways to help.
+nano-git-db is written and maintained by one programmer in his spare time. If you like this thing, use it often, and/or it saves you time - sponsoring it keeps it moving!
+
+Even a few dollars a month is meaningful. Or just buy me a coffee.
+
+**Direct support**
+
+- [GitHub Sponsors](https://github.com/sponsors/jim-collier)
+
+**Indirect support**
+
+- Star the repo.
+- File good bug reports and feature requests.
+
+**Get the word out**
+
+Tell other developers and teams on various socials how this has changed your life!
+
+- [r/git](https://www.reddit.com/r/git/)
+- [Hacker News](news.ycombinator.com)
+- [r/selfhosted](https://www.reddit.com/r/selfhosted/)
 
 ## Copyright and license
 

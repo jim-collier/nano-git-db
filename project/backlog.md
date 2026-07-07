@@ -54,10 +54,10 @@ In each section, items are listed approximately from newest to oldest.
 
 ### New features and enhancements
 
-- 🛠️ Donations model:
+- ✅ Donations model:
 	- ✅ "Support nano-git-db" button in Help|About (or `--donate`), showing the URL it opens. The `donate` package holds one blurb + one link (DONATE.md); CLI prints the blurb and URL line-spaced, TUI shows a dialog, web shows a Support page. Open-source-only (enterprise turns `donate.Enabled` off).
-	- 🛠️ `## Support nano-git-db` section in README.md - section added (scaffolded with our own copy; paste SilkTerm's exact wording if preferred).
-	- 🛠️ `DONATE.md` - added (scaffolded with our own copy; paste SilkTerm's if preferred).
+	- ✅ `## Support nano-git-db` section in README.md - adapted from SilkTerm's (name + socials fit a git/database tool).
+	- ✅ `DONATE.md` - adapted from SilkTerm's.
 	- ✅ `.github/FUNDING.yml` - added (custom link to DONATE.md live; platform handles commented, see FYI).
 	- ✅ Locked with `.github/CODEOWNERS`:
 		- ✅ Isolated Help|About dialog TUI, web UI, CLI code file (each front-end's donate.go + the `donate` package + donate.html, all listed in CODEOWNERS).
