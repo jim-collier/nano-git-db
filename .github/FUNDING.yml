@@ -1,10 +1,6 @@
-# GitHub reads this to show a "Sponsor" button on the repo. Fill in the handles
-# you use and uncomment them. An empty or not-yet-created handle 404s, so keep a
-# platform commented until its account exists. The custom link below always works,
-# since it points at DONATE.md in this repo.
-
-# github: [jim-collier]      # uncomment once GitHub Sponsors is enabled
-# ko_fi:
-# liberapay:
-# patreon:
-custom: ["https://github.com/jim-collier/nano-git-db/blob/main/DONATE.md"]
+# Shows a "Sponsor" button on the repo. Fill in each platform you set up;
+# leave the rest commented. github must be a GitHub Sponsors profile that exists.
+github: [jim-collier]
+# ko_fi: your-handle
+# liberapay: your-handle
+custom: ["https://github.com/jim-collier/nano-git-db/blob/HEAD/DONATE.md"]
