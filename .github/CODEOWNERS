@@ -1,0 +1,13 @@
+# The files that decide where support/donations go are maintainer-owned. A pull
+# request touching any of these needs @jim-collier's review before it can merge,
+# so an address or link cannot be quietly swapped. (Enforced once branch
+# protection requires review from code owners.)
+
+/.github/CODEOWNERS                            @jim-collier
+/.github/FUNDING.yml                           @jim-collier
+/DONATE.md                                     @jim-collier
+/source/donate/                                @jim-collier
+/source/internal/cli/donate.go                 @jim-collier
+/source/internal/tui/donate.go                 @jim-collier
+/source/internal/web/donate.go                 @jim-collier
+/source/internal/web/templates/donate.html     @jim-collier

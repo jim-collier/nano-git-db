@@ -83,7 +83,7 @@ func Run(args []string) error {
 	fmt.Println("                                   (password from NGDB_WEB_PASSWORD or prompt)")
 	fmt.Println("    --script <f.lua> <ddl> <sqlite> <dir>   run a Lua script")
 	if donate.Enabled { // open-source-only feature
-		fmt.Println("    --donate                       show the project's donation addresses")
+		fmt.Println("    --donate                       ways to support the project")
 	}
 	fmt.Println("    --version, -v                  print the version and exit")
 	fmt.Println("  schema and log:")

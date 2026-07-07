@@ -4,23 +4,11 @@
 package tui
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/jim-collier/nano-git-db/donate"
 )
 
-// donateModal shows the project's donation targets in a dismissable dialog.
-// Unset addresses read as "not yet configured" (and there is nothing to copy).
+// donateModal shows the support appeal and the link to visit in a dismissable
+// dialog. A terminal cannot reliably open a browser, so it displays the URL.
 func (p *picker) donateModal() {
-	var b strings.Builder
-	b.WriteString(donate.Intro)
-	for _, t := range donate.Targets {
-		value := t.Value
-		if !t.Configured() {
-			value = "(not yet configured)"
-		}
-		fmt.Fprintf(&b, "\n\n%s\n%s", t.Label, value)
-	}
-	p.modal("donate", b.String(), []string{"Close"}, func(string) {})
+	p.modal("support", donate.Intro+"\n\n"+donate.URL, []string{"Close"}, func(string) {})
 }

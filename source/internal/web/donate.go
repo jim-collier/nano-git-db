@@ -9,10 +9,10 @@ import (
 	"github.com/jim-collier/nano-git-db/donate"
 )
 
-// donate renders the donation targets partial into #main. Unconfigured targets
-// show as "not yet configured" and carry no copyable value.
+// donate renders the support partial into #main: the blurb and a link to the
+// project's DONATE.md.
 func (s *server) donate(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "donate.html", map[string]any{
-		"Intro": donate.Intro, "Targets": donate.Targets,
+		"Intro": donate.Intro, "URL": donate.URL,
 	})
 }

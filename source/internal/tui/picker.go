@@ -175,7 +175,7 @@ func (p *picker) populate() {
 		entry{"Create new database", "register a new database and open it", p.createForm, nil},
 		entry{"Open existing ...", "open a DDL + tx-log without registering", p.openForm, nil})
 	if donate.Enabled { // open-source-only feature
-		entries = append(entries, entry{"Donate", "support nano-git-db development", p.donateModal, nil})
+		entries = append(entries, entry{"Support nano-git-db", "ways to support the project", p.donateModal, nil})
 	}
 	for i, ent := range entries {
 		if i > 0 {

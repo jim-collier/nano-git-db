@@ -73,6 +73,7 @@
 	- [A minimal to-do database](#a-minimal-to-do-database)
 	- [Basic CLI](#basic-cli)
 - [Full syntax reference](#full-syntax-reference)
+- [Support nano-git-db](#support-nano-git-db)
 - [Copyright and license](#copyright-and-license)
 
 <!-- /TOC -->
@@ -298,6 +299,10 @@ Tired of typing paths? Run `ngdb --init` in the directory with your `todo.ddl` t
 ## Full syntax reference
 
 The complete DDL, sidecar-file (named queries, triggers), CLI, run-mode, access-model, and registry reference lives in [syntax.md](syntax.md).
+
+## Support nano-git-db
+
+nano-git-db is free and open source. If it is useful to you, please consider supporting its development - see [DONATE.md](DONATE.md) for ways to help.
 
 ## Copyright and license
 
