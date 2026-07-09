@@ -189,6 +189,17 @@ fMain(){
 	####
 
 	cd "${dirPath_Base}"
+
+	## Capture the whole run to a rotated log so warnings from any stage (build,
+	## vet, staticcheck, govulncheck) can be reviewed after the fact - lint-report.bash
+	## reads the newest. Rotate the dir first, then tee. Best-effort: if the log can't
+	## be created the run just goes uncaptured.
+	declare dirPath_ArtifactsLint="${dirPath_Base}/cicd/artifacts/lint"
+	if mkdir -p "${dirPath_ArtifactsLint}" 2>/dev/null; then
+		gfs_rotate "${dirPath_ArtifactsLint}" run log >/dev/null 2>&1 || true
+		exec > >(tee "${dirPath_ArtifactsLint}/run_${serialDT}.log") 2>&1
+	fi
+
 	pushd "${dirPath_Source}" 1>/dev/null
 
 	if ((isCompileProject)); then
@@ -220,6 +231,20 @@ fMain(){
 			fEcho_Clean "Packaged ${filePath_Exec_Zip_Win_x86_64}"
 		fi
 
+	fi
+
+	## Lint + format. gofmt rewrites Go source in place (the language standard;
+	## Bash is never auto-formatted). staticcheck is the deeper linter and resolves
+	## its own module, so it runs outside vendor mode. go vet lives in test.bash.
+	## Under --quick, staticcheck's network fetch is skipped (gofmt still runs).
+	fEcho_Section "Lint + format"
+	( cd "${dirPath_Source}"  &&  gofmt -w cmd internal )
+	fEcho_Clean "gofmt: formatted in place"
+	if ((doQuick)); then
+		fEcho_Clean "staticcheck skipped (--quick)"
+	else
+		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run honnef.co/go/tools/cmd/staticcheck@latest ./... )
+		fEcho_Clean "staticcheck: clean"
 	fi
 
 	## Test
@@ -540,6 +565,9 @@ fi
 
 ## Make sure relative paths work
 cd "${meDir}"
+
+## GFS rotation for the run-log artifacts (gfs_rotate)
+source "${meDir}/utility/include/gfs-rotate.bash"
 
 ## Invoke main
 fMain  "${@}"
