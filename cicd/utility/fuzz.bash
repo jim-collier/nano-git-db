@@ -27,6 +27,7 @@ while (($#)); do case "$1" in
 	*) echo "fuzz.bash: unknown option: $1" >&2; exit 2 ;;
 esac; done
 
+source "$(dirname "$0")/include/cpu-limit.bash"   ## NGDB_JOBS + GOMAXPROCS (<=half cores; caps fuzz workers)
 cd "$(dirname "$0")/../../source"   ## module root (go.mod)
 
 ## Discover "<import-path> <FuzzName>" pairs. `go test -list` prints the matching
@@ -51,7 +52,7 @@ fails=0
 for t in "${targets[@]}"; do
 	pkg="${t%% *}"; fn="${t##* }"
 	printf '  %-52s %-20s ' "${pkg#github.com/jim-collier/nano-git-db/}" "${fn} (${fuzzTime})"
-	if go test -mod=vendor -run '^$' -fuzz="^${fn}\$" -fuzztime="${fuzzTime}" "${pkg}" >/tmp/ngdb-fuzz.$$ 2>&1; then
+	if go test -mod=vendor -p "${NGDB_JOBS}" -run '^$' -fuzz="^${fn}\$" -fuzztime="${fuzzTime}" "${pkg}" >/tmp/ngdb-fuzz.$$ 2>&1; then
 		echo "ok"
 	else
 		echo "CRASH"

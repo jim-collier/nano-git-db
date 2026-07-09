@@ -607,6 +607,10 @@ fi
 ## Make sure relative paths work
 cd "${meDir}"
 
+## Cap every step to at most half the cores (exports GOMAXPROCS, so the go tools
+## spawned below - staticcheck/govulncheck/gosec - inherit it too).
+source "${meDir}/utility/include/cpu-limit.bash"
+
 ## GFS rotation for the run-log artifacts (gfs_rotate)
 source "${meDir}/utility/include/gfs-rotate.bash"
 

@@ -44,6 +44,7 @@ inferno="$(command -v inferno-flamegraph || true)"
 [[ -x "${inferno}" ]] || fSkip "inferno-flamegraph not found (cargo install inferno)"
 command -v python3 >/dev/null || fSkip "python3 not found"
 
+source "${meDir}/include/cpu-limit.bash"   ## NGDB_JOBS + GOMAXPROCS (<=half cores)
 source "${meDir}/include/gfs-rotate.bash"
 
 cd "${meDir}/../../source"                              ## module root (go.mod)
@@ -53,7 +54,7 @@ tmp="$(mktemp -d)"; trap 'rm -rf "${tmp}"' EXIT
 ## Sample the replay benchmark. A build/run failure here is an app problem, but
 ## the stage stays non-gating - it warns and skips so a profiler hiccup never
 ## blocks a publish (tests already gate correctness).
-if ! go test -mod=vendor -run '^$' -bench '^BenchmarkReplay$' -benchtime="${iters}x" \
+if ! go test -mod=vendor -p "${NGDB_JOBS}" -run '^$' -bench '^BenchmarkReplay$' -benchtime="${iters}x" \
 	-cpuprofile="${tmp}/cpu.prof" -o "${tmp}/bench.test" ./internal/core/crud/ >"${tmp}/bench.log" 2>&1; then
 	sed 's/^/  /' "${tmp}/bench.log"
 	fSkip "benchmark run failed"

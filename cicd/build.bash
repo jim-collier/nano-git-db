@@ -4,6 +4,7 @@
 # build stays bin/ngdb. Pure-Go only: CGO_ENABLED=0 keeps cross-compiles
 # toolchain-free.
 set -euo pipefail
+source "$(dirname "$0")/utility/include/cpu-limit.bash"  ## NGDB_JOBS + GOMAXPROCS (<=half cores)
 cd "$(dirname "$0")/.."  ## repo root; this script lives in cicd/
 
 out="ngdb"
@@ -18,6 +19,6 @@ ver="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
 # The module root lives under source/ (so vendored deps sit under source/ too).
 # -mod=vendor: build only from the committed vendor/ tree, never the network.
 mkdir -p bin
-( cd source && CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w -X github.com/jim-collier/nano-git-db/app.Version=${ver}" -o "../bin/${out}" ./cmd/ngdb )
+( cd source && CGO_ENABLED=0 go build -mod=vendor -p "${NGDB_JOBS}" -trimpath -ldflags="-s -w -X github.com/jim-collier/nano-git-db/app.Version=${ver}" -o "../bin/${out}" ./cmd/ngdb )
 # ls, not du: on compressing filesystems (zfs) du reports allocated, not real, size.
 echo "built: $(ls -lh "bin/${out}" | awk '{print $5}')	bin/${out}"
