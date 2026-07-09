@@ -50,18 +50,19 @@ In spite of being a SQL backend, data is saved one-field at a time - as long as 
 
 ## CI/CD pipeline
 
-- Will have a CI/CD pipeline that's manually kicked off, that:
+Manually kicked off via `cicd/cicd.bash`. Stages, in order (each fails early and hard on a real problem, exit >0):
 
-	- Auto-lints/formats
-	- Debug build
-	- Run regression testing on the debug build
-	- Profile performance (don't fail unless program fails)
-	- Compile native version
-	- Compile other versions, if it's a major milestone
-	- Run `n8git_backup-and-publish`
-	- Copy native release build to dogfood location
+- **Build** native size-optimized, then cross-compile (windows-amd64, linux-arm64, windows-arm64; pure Go, no extra toolchains), zip windows into `dist/`.
+- **Lint + format**: `gofmt -w` rewrites Go in place (never Bash), then `staticcheck` gates. `go vet` runs in test.bash.
+- **Tests**: full regression suite (`go test`), which also runs every fuzz target's seed corpus.
+- **Fuzz**: `cicd/utility/fuzz.bash` auto-discovers each `FuzzXxx` and runs it a short budget; a crash fails the run.
+- **Security + supply-chain**: `go mod verify`, `govulncheck`, and `gosec` (with a documented exclude list justified for a local-first single-user git-synced tool).
+- **Profiler** (non-gating artifact): samples the CPU-hot tx-log replay path, renders an inferno flamegraph into `cicd/artifacts/profiling/` (GFS-rotated), and prints a hotspot summary (`flame-report.py`). Tooling misses warn and skip.
+- **Dogfood**: copy the native release to the local run path.
+- **Screenshots**: regenerate the README thumbnails.
+- **Publish**: `n8git_backup-and-publish`.
 
-On failure, fail early and hard (exit >0 with error message).
+The whole run is tee'd to a rotated `cicd/artifacts/lint/run_<ts>.log` so warnings from any stage can be reviewed after the fact (`lint-report.bash`). `--quick` skips the slow stages (cross-builds, fuzz, profiler, screenshots, govulncheck, gosec); lint + tests still run. `cicd/artifacts/` is gitignored.
 
 ## Language and stack
 
