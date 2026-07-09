@@ -12,6 +12,9 @@
 # Test/coverage
 *.out
 
+# CI/CD artifacts (run logs, flamegraphs) - derived, rotated in place
+/cicd/artifacts/
+
 # Donation signing keys live outside the repo (../private/donation_keys/); never
 # let a stray copy land in git.
 donation_ed25519
