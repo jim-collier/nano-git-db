@@ -62,7 +62,7 @@ Manually kicked off via `cicd/cicd.bash`. Stages, in order (each fails early and
 - **Screenshots**: regenerate the README thumbnails.
 - **Publish**: `n8git_backup-and-publish`.
 
-The whole run is tee'd to a rotated `cicd/artifacts/lint/run_<ts>.log` so warnings from any stage can be reviewed after the fact (`lint-report.bash`). `--quick` skips the slow stages (cross-builds, fuzz, profiler, screenshots, govulncheck, gosec); lint + tests still run. `cicd/artifacts/` is gitignored.
+The whole run is tee'd to a rotated `cicd/artifacts/lint/run_<ts>.log` so warnings from any stage can be reviewed after the fact (`lint-report.bash`). `--quick` skips the slow stages (cross-builds, fuzz, profiler, screenshots, govulncheck, gosec); lint + tests still run. Every step is capped to at most half the cores (`cpu-limit.bash`: `GOMAXPROCS` + `-p`). `cicd/artifacts/` is gitignored.
 
 ## Language and stack
 
