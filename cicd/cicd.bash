@@ -46,7 +46,7 @@ if [[ -z "${doQuietly+x}" ]]; then
 
 	## Generic constants
 	declare  -i doQuietly=0
-	declare  -i doQuick=0  ## --quick: skip the slow stages (cross-builds, fuzz, screenshots, govulncheck, gosec)
+	declare  -i doQuick=0  ## --quick: skip the slow stages (cross-builds, fuzz, profiler, screenshots, govulncheck, gosec)
 	declare  -i doPromptToContinue=1
 	declare -r  thisVersion="1.0.0-beta3"         ## Put you script's semantic version here.
 	declare -r  thisBuild="1mzfd9c"
@@ -100,8 +100,8 @@ fSyntax(){  { ((doQuietly)) || ((wasShown_Syntax)); } && return; wasShown_Syntax
 	#           X-------------------------------------------------------------------------------X
 	fEcho_Clean "Usage: ${meName} [options]"
 	fEcho_Clean "  -q, --quiet         Run unattended (no prompt) and quiet; flows to publish."
-	fEcho_Clean "      --quick         Skip the slow stages: cross-builds, fuzz, screenshots,"
-	fEcho_Clean "                      govulncheck + gosec (lint + seed-corpus tests still run)."
+	fEcho_Clean "      --quick         Skip the slow stages: cross-builds, fuzz, profiler,"
+	fEcho_Clean "                      screenshots, govulncheck + gosec (lint + tests still run)."
 	fEcho_Clean "  -m, --message MSG   Commit message for publish (also --msg; -m MSG or -m=MSG)."
 	fEcho_Clean "                      With -q and no -m, a message is auto-generated."
 	fEcho_Clean "  -h, --help          Show this."
@@ -163,7 +163,7 @@ fMain(){
 		fi
 		fEcho_Clean "Test script ..................: ${filePath_CICD_TestExec}"
 		if ((doQuick)); then
-		fEcho_Clean "Quick mode ...................: cross-builds + fuzz + screenshots + govulncheck + gosec skipped"
+		fEcho_Clean "Quick mode ...................: cross-builds + fuzz + profiler + screenshots + govulncheck + gosec skipped"
 		fi
 		fEcho_Clean "Git commit and push script ...: ${gitAutomationScript}"
 		if [[ -n "${commitMessage}" ]]; then
@@ -328,6 +328,18 @@ fMain(){
 				break
 			fi
 		done;:
+	fi
+
+	## Profiler: sample the CPU-hot replay path, render a flamegraph into
+	## cicd/artifacts/profiling, GFS-rotate the old ones, and print the hotspot
+	## summary (flame-report.py, plain mode) into the log. Non-gating artifact -
+	## any tooling miss warns and skips. Slow, so --quick skips it. cicd never
+	## touches the .flame-seen marker; that startup gate is flame-report.py --check.
+	if ((doQuick)); then
+		fEcho_Section "Profiler (skipped: --quick)"
+	elif [[ -x "${dirPath_Base}/cicd/utility/profile.bash" ]]; then
+		fEcho_Section "Profiler (flamegraph + hotspots)"
+		"${dirPath_Base}/cicd/utility/profile.bash"
 	fi
 
 	## Screenshots: regenerate the README thumbnails from the just-built binary
