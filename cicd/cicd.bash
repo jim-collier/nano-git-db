@@ -46,7 +46,7 @@ if [[ -z "${doQuietly+x}" ]]; then
 
 	## Generic constants
 	declare  -i doQuietly=0
-	declare  -i doQuick=0  ## --quick: skip cross-builds, screenshots, and the slow supply-chain scan
+	declare  -i doQuick=0  ## --quick: skip the slow stages (cross-builds, fuzz, screenshots, govulncheck, gosec)
 	declare  -i doPromptToContinue=1
 	declare -r  thisVersion="1.0.0-beta3"         ## Put you script's semantic version here.
 	declare -r  thisBuild="1mzfd9c"
@@ -100,7 +100,8 @@ fSyntax(){  { ((doQuietly)) || ((wasShown_Syntax)); } && return; wasShown_Syntax
 	#           X-------------------------------------------------------------------------------X
 	fEcho_Clean "Usage: ${meName} [options]"
 	fEcho_Clean "  -q, --quiet         Run unattended (no prompt) and quiet; flows to publish."
-	fEcho_Clean "      --quick         Skip cross-builds, screenshots, and the govulncheck scan."
+	fEcho_Clean "      --quick         Skip the slow stages: cross-builds, fuzz, screenshots,"
+	fEcho_Clean "                      govulncheck + gosec (lint + seed-corpus tests still run)."
 	fEcho_Clean "  -m, --message MSG   Commit message for publish (also --msg; -m MSG or -m=MSG)."
 	fEcho_Clean "                      With -q and no -m, a message is auto-generated."
 	fEcho_Clean "  -h, --help          Show this."
@@ -162,7 +163,7 @@ fMain(){
 		fi
 		fEcho_Clean "Test script ..................: ${filePath_CICD_TestExec}"
 		if ((doQuick)); then
-		fEcho_Clean "Quick mode ...................: cross-builds + screenshots + govulncheck skipped"
+		fEcho_Clean "Quick mode ...................: cross-builds + fuzz + screenshots + govulncheck + gosec skipped"
 		fi
 		fEcho_Clean "Git commit and push script ...: ${gitAutomationScript}"
 		if [[ -n "${commitMessage}" ]]; then
@@ -252,16 +253,44 @@ fMain(){
 	"${filePath_CICD_TestExec}"
 	fEcho_Clean "Tests passed"
 
-	## Supply-chain checks. go mod verify is quick and offline; govulncheck pulls
-	## the tool + vuln db over the network and is the slow one, so --quick skips
-	## it (the offline checks all live in test.bash). Real findings fail the run.
-	fEcho_Section "Supply-chain (go mod verify$( ((doQuick)) || echo " + govulncheck"))"
+	## Fuzz the parsers/decoders with mutated input. The seed corpus already runs
+	## inside test.bash (every FuzzXxx executes its seeds as a normal test); this is
+	## the mutation budget, which is the slow part, so --quick skips it. A crash
+	## fails the run and the minimized input lands under the package's testdata/.
+	if ((doQuick)); then
+		fEcho_Section "Fuzz (skipped: --quick)"
+	else
+		fEcho_Section "Fuzz"
+		"${dirPath_Base}/cicd/utility/fuzz.bash" --time 10s
+	fi
+
+	## Security + supply-chain. go mod verify is quick and offline; govulncheck and
+	## gosec each pull a tool over the network and are the slow ones, so --quick
+	## skips them (the offline checks all live in test.bash). Real findings fail.
+	##
+	## gosec excludes below are all justified for this local-first, single-user,
+	## git-synced tool (documented so a future maintainer sees the reasoning, not a
+	## silent blanket-disable):
+	##   G104            unchecked errors on cleanup/stderr paths - idiomatic Go
+	##   G204            subprocess with variable args - we shell out to git by design
+	##   G304/G703       open user-named DDL/log/config paths - that IS the program
+	##   G301/G302/G306  file/dir perms - the tx-log is git-committed and readable by
+	##                   design; real secrets (webusers.toml, keys) write 0600 at their sites
+	##   G202            SQL identifier concat - SQLite can't bind identifiers; all pass
+	##                   through quoteIdent and every value binds as ? (see txlog.applyOne)
+	##   G203            template.HTML/CSS - only wraps dev-computed layout CSS, never user input
+	##   G124            cookie Secure - set under HTTPS; local mode is loopback-only HTTP
+	##   G101            false positive on a filename constant
+	fEcho_Section "Security + supply-chain (go mod verify$( ((doQuick)) || echo " + govulncheck + gosec"))"
 	( cd "${dirPath_Source}"  &&  go mod verify )
 	if ((doQuick)); then
-		fEcho_Clean "Module verified (govulncheck skipped: --quick)"
+		fEcho_Clean "Module verified (govulncheck + gosec skipped: --quick)"
 	else
 		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run golang.org/x/vuln/cmd/govulncheck@latest ./... )
-		fEcho_Clean "Module verified, no known vulnerabilities"
+		fEcho_Clean "No known vulnerabilities (govulncheck)"
+		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run github.com/securego/gosec/v2/cmd/gosec@latest \
+			-exclude=G101,G104,G124,G202,G203,G204,G301,G302,G304,G306,G703 -quiet ./... )
+		fEcho_Clean "No security findings (gosec)"
 	fi
 
 	popd 1>/dev/null
