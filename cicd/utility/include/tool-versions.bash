@@ -5,3 +5,4 @@
 NGDB_STATICCHECK="honnef.co/go/tools/cmd/staticcheck@v0.7.0"
 NGDB_GOVULNCHECK="golang.org/x/vuln/cmd/govulncheck@v1.6.0"
 NGDB_GOSEC="github.com/securego/gosec/v2/cmd/gosec@v2.27.1"
+NGDB_GORELEASER="github.com/goreleaser/goreleaser/v2@v2.17.0"

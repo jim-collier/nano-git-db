@@ -1,0 +1,47 @@
+# Release on merge to main. The source var app.Version is authoritative: this
+# tags v<Version> (skipping if that tag already exists - i.e. the version wasn't
+# bumped) and hands off to goreleaser, which cross-builds, archives, and publishes
+# the GitHub Release with checksums.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: source/go.sum
+      - name: Tag from source version
+        id: tag
+        run: |
+          version=$(grep -oP 'Version = "\K[^"]+' source/app/app.go | head -1)
+          tag="v${version}"
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "Tag ${tag} already exists - version not bumped, skipping release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            git config user.name "nano-git-db"
+            git config user.email "release@nano-git-db.local"
+            git tag -a "${tag}" -m "${tag}"
+            git push origin "${tag}"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: goreleaser
+        if: steps.tag.outputs.release == 'true'
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

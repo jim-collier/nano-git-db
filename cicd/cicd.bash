@@ -37,12 +37,10 @@ if [[ -z "${doQuietly+x}" ]]; then
 	declare     dirPath_Source="${dirPath_Base}/source"
 	declare     filePath_ExecToTestAndInstall_BuildLocation="${dirPath_Base}/bin/${exeName}"  ## cicd/build.bash outputs straight to bin/
 	declare     filePath_ExecToTestAndInstall_FinalHome="${dirPath_Base}/bin/${exeName}"
-	declare     filePath_Exec_Zip_Win_x86_64="${dirPath_Base}/dist/${exeName}-windows-x86_64.zip"
 	declare     filePath_CICD_TestExec="${dirPath_Base}/cicd/test.bash"
 	declare     gitAutomationScript="${dirPath_Base}/cicd/utility/n8git_backup-and-publish"
 	declare -ra preferredInstallPaths_Bash=("${HOME}/synced/0-0/common/exec/util/linux/bash"                    "/usr/local/sbin/"                                )  ## First one that exists, wins
 	declare -ra preferredInstallPaths_Linux_x8664=("${HOME}/synced/0-0/common/exec/util/linux/bin"              "/usr/local/sbin/"                                )  ## First one that exists, wins
-	declare -ra preferredInstallPaths_Win_x8664=("${HOME}/synced/0-0/common/exec/util/mswin/cli/by-self/win64"  "${HOME}/synced/0-0/common/exec/util/win/win64jc" )  ## First one that exists, wins
 
 	## Generic constants
 	declare  -i doQuietly=0
@@ -142,7 +140,6 @@ fMain(){
 	fResolvePath  gitAutomationScript                          "${gitAutomationScript}"                            ; readonly gitAutomationScript
 	fResolvePath  filePath_ExecToTestAndInstall_BuildLocation  "${filePath_ExecToTestAndInstall_BuildLocation}"  0 ; readonly filePath_ExecToTestAndInstall_BuildLocation
 	fResolvePath  filePath_ExecToTestAndInstall_FinalHome      "${filePath_ExecToTestAndInstall_FinalHome}"      0 ; readonly filePath_ExecToTestAndInstall_FinalHome
-	fResolvePath  filePath_Exec_Zip_Win_x86_64                 "${filePath_Exec_Zip_Win_x86_64}"                 0 ; readonly filePath_Exec_Zip_Win_x86_64
 
 	## Validate
 	[[ -d "${dirPath_Base}"            ]]  ||  fThrowError "Path not found: '${dirPath_Base}'"
@@ -159,7 +156,6 @@ fMain(){
 		if ((isCompileProject)); then
 		fEcho_Clean "Executable to build ..........: ${filePath_ExecToTestAndInstall_BuildLocation}"
 		fEcho_Clean "Executable final location ....: ${filePath_ExecToTestAndInstall_FinalHome}"
-		fEcho_Clean "Win x86_64 zip location ......: ${filePath_Exec_Zip_Win_x86_64}"
 		fi
 		fEcho_Clean "Test script ..................: ${filePath_CICD_TestExec}"
 		if ((doQuick)); then
@@ -222,22 +218,16 @@ fMain(){
 			fEcho_Clean "WARNING: app.Version ${srcVersion} already tagged (v${srcVersion}) - bump it in source/app/app.go before releasing."
 		fi
 
-		## Cross-compile: pure Go, so every target builds here with no extra toolchains.
-		## build.bash names cross outputs bin/ngdb-<os>-<arch>[.exe]. Skipped under --quick.
+		## Cross-compile via goreleaser (same .goreleaser.yaml the release uses), so
+		## the local run proves every target still builds without a second hand-rolled
+		## path. --snapshot builds only (no archive/publish); release packaging lives in
+		## the release workflow. Skipped under --quick. macOS deferred (needs a Mac).
 		if ((doQuick)); then
 			fEcho_Section "Cross-compile (skipped: --quick)"
 		else
-			fEcho_Section "Cross-compile (win-amd64, linux-arm64, win-arm64)"
-			GOOS=windows GOARCH=amd64  "${dirPath_Base}/cicd/build.bash"
-			GOOS=linux   GOARCH=arm64  "${dirPath_Base}/cicd/build.bash"
-			GOOS=windows GOARCH=arm64  "${dirPath_Base}/cicd/build.bash"
-			## macOS deferred: needs a Mac for signing/testing (see backlog).
-
-			## Package the Windows x86_64 zip
-			[[ ! -d "${dirPath_Base}/dist" ]]  &&  mkdir -p "${dirPath_Base}/dist"
-			rm -f "${filePath_Exec_Zip_Win_x86_64}"
-			( cd "${dirPath_Base}/bin"  &&  zip -q9 "../dist/$(basename "${filePath_Exec_Zip_Win_x86_64}")" "${exeName}-windows-amd64.exe" )
-			fEcho_Clean "Packaged ${filePath_Exec_Zip_Win_x86_64}"
+			fEcho_Section "Cross-compile (goreleaser build, all targets)"
+			( cd "${dirPath_Base}"  &&  GOFLAGS=  go run "${NGDB_GORELEASER}" build --snapshot --clean )
+			fEcho_Clean "Cross-compiled all targets (linux + windows, amd64 + arm64)"
 		fi
 
 	fi
@@ -318,25 +308,6 @@ fMain(){
 			break
 		fi
 	done;:
-
-	## Windows x86_64 (no fresh zip under --quick, so skip rather than install a stale one)
-	if ((doQuick)); then
-		fEcho_Clean "Windows x86_64 install skipped (--quick)"
-	elif [[ ! -f "${filePath_Exec_Zip_Win_x86_64}" ]]; then
-		fEcho "Not found: ${filePath_Exec_Zip_Win_x86_64}"
-	else
-		for nextPath in "${preferredInstallPaths_Win_x8664[@]}"; do
-			if [[ -d "${nextPath}" ]]; then
-				fEcho_Clean "extracting ${filePath_Exec_Zip_Win_x86_64} -> ${nextPath%%/}"
-				if { ! unzip -u -o  "${filePath_Exec_Zip_Win_x86_64}"  -d  "${nextPath%%/}"; }  &&  [[ "${nextPath}" != "${HOME}/"* ]]; then
-					sudo unzip -u -o  "${filePath_Exec_Zip_Win_x86_64}"  -d  "${nextPath%%/}"
-				fi
-				ls  -lA  --color=always  --human-readable  --time-style=+"%Y-%m-%d %H:%M:%S"  "${nextPath%%/}/${exeName}"*
-				fEcho_Clean "Installed (windows x86_64) -> ${nextPath%%/}/"
-				break
-			fi
-		done;:
-	fi
 
 	## Profiler: sample the CPU-hot replay path, render a flamegraph into
 	## cicd/artifacts/profiling, GFS-rotate the old ones, and print the hotspot

@@ -1,0 +1,37 @@
+# Release packaging for the public binary. Cross-compiles the same targets the
+# old hand-rolled cicd step did (linux + windows, amd64 + arm64; macOS deferred),
+# archives each, and emits checksums. Pure-Go so no C toolchain is needed.
+# app.Version is authoritative in source; only app.Build (short commit) is stamped.
+version: 2
+project_name: ngdb
+
+builds:
+  - id: ngdb
+    dir: source
+    main: ./cmd/ngdb
+    binary: ngdb
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -mod=vendor
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/jim-collier/nano-git-db/app.Build={{ .ShortCommit }}
+    goos: [linux, windows]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: ngdb
+    formats: [tar.gz]
+    name_template: "ngdb-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  github:
+    owner: jim-collier
+    name: nano-git-db
