@@ -54,6 +54,13 @@ In each section, items are listed approximately from newest to oldest.
 
 ### New features and enhancements
 
+- 🛠️ CI/CD improvements (all three repos):
+	- ✅ Minimal hosted CI: a small `ci.yml` per repo runs vet + gofmt + test + build on push/PR to `dev` and `main`, Go pinned. Safety net only; the full local pipeline stays local.
+	- 🛠️ Dev branch + release on main: adopted a `dev` integration branch (features merge to `dev`; `dev` -> `main` cuts a release). Version is authoritative in a source var (bumped by hand); the build stamps commit provenance separately; the pipeline warns if the version wasn't bumped. Release-cutting workflow still to wire.
+	- 🔘 goreleaser for release packaging: same targets and archive naming as the hand-rolled cross-compile, plus checksums, wired into the release workflow. Local native build stays as-is.
+	- ✅ Pin tool versions: staticcheck/govulncheck/gosec pinned in one place; a dependabot config brings dependency + toolchain bumps as grouped PRs against `dev`.
+	- 🔘 README badges: CI status, latest release, Go version.
+
 - ✅ Donations model:
 	- ✅ "Support nano-git-db" button in Help|About (or `--donate`), showing the URL it opens. The `donate` package holds one blurb + one link (DONATE.md); CLI prints the blurb and URL line-spaced, TUI shows a dialog, web shows a Support page. Open-source-only (enterprise turns `donate.Enabled` off).
 	- ✅ `## Support nano-git-db` section in README.md - adapted from SilkTerm's (name + socials fit a git/database tool).
