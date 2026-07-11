@@ -23,12 +23,6 @@ jobs:
         with:
           go-version: '1.26.4'
           cache-dependency-path: source/go.sum
-      - name: git identity
-        # Some tests shell out to `git commit` (autosync); a bare runner has no
-        # identity, so give it one. Harmless on a dev machine that already does.
-        run: |
-          git config --global user.email "ci@nano-git-db.local"
-          git config --global user.name "nano-git-db CI"
       - name: gofmt
         run: |
           unformatted=$(gofmt -l . | grep -v '^vendor/' || true)

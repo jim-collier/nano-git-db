@@ -42,6 +42,10 @@ func TestAutoSyncPullsAndReplays(t *testing.T) {
 	gitrun(t, base, "init", "--bare", remote)
 	logA, logB := filepath.Join(base, "a"), filepath.Join(base, "b")
 	gitrun(t, base, "clone", remote, logA)
+	// Sync's own `git commit` runs with the ambient env (no identity injected),
+	// so give the clone a repo-local one - a bare CI runner has no global identity.
+	gitrun(t, logA, "config", "user.email", "t@t")
+	gitrun(t, logA, "config", "user.name", "t")
 	ddlPath := filepath.Join(base, "s.ddl")
 	if err := os.WriteFile(ddlPath, []byte(syncDDL), 0o644); err != nil {
 		t.Fatal(err)
@@ -66,6 +70,8 @@ func TestAutoSyncPullsAndReplays(t *testing.T) {
 
 	// B joins the usual way: cloning the already-populated log repo
 	gitrun(t, base, "clone", remote, logB)
+	gitrun(t, logB, "config", "user.email", "t@t")
+	gitrun(t, logB, "config", "user.name", "t")
 	cb, err := OpenClient(ddlPath, filepath.Join(base, "b.sqlite"), logB, "ub")
 	if err != nil {
 		t.Fatal(err)
