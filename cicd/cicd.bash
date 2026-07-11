@@ -252,7 +252,7 @@ fMain(){
 	if ((doQuick)); then
 		fEcho_Clean "staticcheck skipped (--quick)"
 	else
-		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run honnef.co/go/tools/cmd/staticcheck@latest ./... )
+		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run "${NGDB_STATICCHECK}" ./... )
 		fEcho_Clean "staticcheck: clean"
 	fi
 
@@ -294,9 +294,9 @@ fMain(){
 	if ((doQuick)); then
 		fEcho_Clean "Module verified (govulncheck + gosec skipped: --quick)"
 	else
-		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run golang.org/x/vuln/cmd/govulncheck@latest ./... )
+		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run "${NGDB_GOVULNCHECK}" ./... )
 		fEcho_Clean "No known vulnerabilities (govulncheck)"
-		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run github.com/securego/gosec/v2/cmd/gosec@latest \
+		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run "${NGDB_GOSEC}" \
 			-exclude=G101,G104,G124,G202,G203,G204,G301,G302,G304,G306,G703 -quiet ./... )
 		fEcho_Clean "No security findings (gosec)"
 	fi
@@ -621,6 +621,9 @@ source "${meDir}/utility/include/cpu-limit.bash"
 
 ## GFS rotation for the run-log artifacts (gfs_rotate)
 source "${meDir}/utility/include/gfs-rotate.bash"
+
+## Pinned linter/scanner versions (NGDB_STATICCHECK/GOVULNCHECK/GOSEC)
+source "${meDir}/utility/include/tool-versions.bash"
 
 ## Invoke main
 fMain  "${@}"
