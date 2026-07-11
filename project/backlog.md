@@ -54,12 +54,12 @@ In each section, items are listed approximately from newest to oldest.
 
 ### New features and enhancements
 
-- 🛠️ CI/CD improvements (all three repos):
+- ✅ CI/CD improvements (all three repos). First live release fires on the next `dev` -> `main` merge (cuts v0.1.0).
 	- ✅ Minimal hosted CI: a small `ci.yml` per repo runs vet + gofmt + test + build on push/PR to `dev` and `main`, Go pinned. Safety net only; the full local pipeline stays local.
-	- 🛠️ Dev branch + release on main: adopted a `dev` integration branch (features merge to `dev`; `dev` -> `main` cuts a release). Version is authoritative in a source var (bumped by hand); the build stamps commit provenance separately; the pipeline warns if the version wasn't bumped. Release-cutting workflow still to wire.
-	- 🔘 goreleaser for release packaging: same targets and archive naming as the hand-rolled cross-compile, plus checksums, wired into the release workflow. Local native build stays as-is.
-	- ✅ Pin tool versions: staticcheck/govulncheck/gosec pinned in one place; a dependabot config brings dependency + toolchain bumps as grouped PRs against `dev`.
-	- 🔘 README badges: CI status, latest release, Go version.
+	- ✅ Dev branch + release on main: adopted a `dev` integration branch (features merge to `dev`; a `dev` -> `main` merge triggers `release.yml`, which tags `v<Version>` and publishes). Version is authoritative in a source var (bumped by hand); the build stamps commit provenance separately; the release skips if the version wasn't bumped.
+	- ✅ goreleaser for release packaging: floss + vendor build/archive/checksum via goreleaser; enterprise reuses its garble build and archives itself (goreleaser's prebuilt builder is Pro-only). The local cross-compile now runs `goreleaser build` too, replacing the hand-rolled one.
+	- ✅ Pin tool versions: staticcheck/govulncheck/gosec/goreleaser pinned in one place; a dependabot config brings dependency + toolchain bumps as grouped PRs against `dev`.
+	- ✅ README badges: CI status, latest release, Go version (public repo; private repos get the CI badge only, since shields.io can't read them).
 
 - ✅ Donations model:
 	- ✅ "Support nano-git-db" button in Help|About (or `--donate`), showing the URL it opens. The `donate` package holds one blurb + one link (DONATE.md); CLI prints the blurb and URL line-spaced, TUI shows a dialog, web shows a Support page. Open-source-only (enterprise turns `donate.Enabled` off).
