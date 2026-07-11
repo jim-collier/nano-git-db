@@ -13,12 +13,14 @@ if [[ -n "${GOOS:-}${GOARCH:-}" ]] && [[ "${GOOS:-$(go env GOHOSTOS)}-${GOARCH:-
 	[[ "${GOOS:-}" == "windows" ]]  &&  out="${out}.exe"
 fi
 
-# Version stamp: git describe if available, else "dev". -X sets it into app.Version.
-ver="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+# app.Version is authoritative in source; we only stamp app.Build with provenance
+# (short commit + -dirty), empty-safe so a release binary from a clean tree reads clean.
+build="$(git rev-parse --short HEAD 2>/dev/null || true)"
+[[ -n "${build}" && -n "$(git status --porcelain 2>/dev/null)" ]]  &&  build="${build}-dirty"
 
 # The module root lives under source/ (so vendored deps sit under source/ too).
 # -mod=vendor: build only from the committed vendor/ tree, never the network.
 mkdir -p bin
-( cd source && CGO_ENABLED=0 go build -mod=vendor -p "${NGDB_JOBS}" -trimpath -ldflags="-s -w -X github.com/jim-collier/nano-git-db/app.Version=${ver}" -o "../bin/${out}" ./cmd/ngdb )
+( cd source && CGO_ENABLED=0 go build -mod=vendor -p "${NGDB_JOBS}" -trimpath -ldflags="-s -w -X github.com/jim-collier/nano-git-db/app.Build=${build}" -o "../bin/${out}" ./cmd/ngdb )
 # ls, not du: on compressing filesystems (zfs) du reports allocated, not real, size.
 echo "built: $(ls -lh "bin/${out}" | awk '{print $5}')	bin/${out}"

@@ -214,6 +214,14 @@ fMain(){
 		"${filePath_ExecToTestAndInstall_BuildLocation}" --version
 		fEcho_Clean "Built ${filePath_ExecToTestAndInstall_BuildLocation}"
 
+		## Bump guard: app.Version is authoritative in source; a release tags v<Version>.
+		## If that tag already exists the version wasn't bumped since the last release -
+		## warn (non-fatal) so a merge to main doesn't try to re-cut an existing version.
+		srcVersion="$(grep -oP 'var Version = "\K[^"]+' "${dirPath_Source}/app/app.go" 2>/dev/null || true)"
+		if [[ -n "${srcVersion}" ]] && git rev-parse -q --verify "refs/tags/v${srcVersion}" >/dev/null 2>&1; then
+			fEcho_Clean "WARNING: app.Version ${srcVersion} already tagged (v${srcVersion}) - bump it in source/app/app.go before releasing."
+		fi
+
 		## Cross-compile: pure Go, so every target builds here with no extra toolchains.
 		## build.bash names cross outputs bin/ngdb-<os>-<arch>[.exe]. Skipped under --quick.
 		if ((doQuick)); then
