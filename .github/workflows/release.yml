@@ -1,7 +1,7 @@
-# Release on merge to main. The source var app.Version is authoritative: this
-# tags v<Version> (skipping if that tag already exists - i.e. the version wasn't
-# bumped) and hands off to goreleaser, which cross-builds, archives, and publishes
-# the GitHub Release with checksums.
+# Release on merge to main. The source var app.Version is authoritative. This
+# GUARDS that the version was incremented (fails the run otherwise), that the
+# README version badge agrees with it, then tags v<Version> and hands off to
+# goreleaser to cross-build, archive, and publish the Release with checksums.
 name: Release
 
 on:
@@ -22,23 +22,43 @@ jobs:
         with:
           go-version: '1.26.5'
           cache-dependency-path: source/go.sum
-      - name: Tag from source version
-        id: tag
+      - name: Guard version and badge
+        id: v
         run: |
           version=$(grep -oP 'Version = "\K[^"]+' source/app/app.go | head -1)
+          [ -n "$version" ] || { echo "::error::could not read Version from source/app/app.go"; exit 1; }
           tag="v${version}"
+          # Increment guard: the version must not already be released, and must be
+          # strictly greater than the latest release tag. A merge to main without a
+          # bump fails here rather than silently doing nothing.
           if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            echo "Tag ${tag} already exists - version not bumped, skipping release."
-            echo "release=false" >> "$GITHUB_OUTPUT"
-          else
-            git config user.name "nano-git-db"
-            git config user.email "release@nano-git-db.local"
-            git tag -a "${tag}" -m "${tag}"
-            git push origin "${tag}"
-            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "::error::Version ${version} already released (tag ${tag}). Bump app.Version before merging to main."
+            exit 1
           fi
+          latest=$(git tag --list 'v*' --sort=-v:refname | head -1)
+          if [ -n "$latest" ]; then
+            top=$(printf '%s\n%s\n' "$latest" "$tag" | sort -V | tail -1)
+            if [ "$top" != "$tag" ]; then
+              echo "::error::Version ${version} is not greater than the latest release ${latest}. Bump app.Version."
+              exit 1
+            fi
+          fi
+          # Badge guard: the README release badge is dynamic (tracks the tag we cut,
+          # so it will show ${version}). If the README instead pins a hardcoded
+          # version badge, it must match the source version.
+          badge=$(grep -oiP 'badge/[Vv]ersion-\K[0-9]+\.[0-9]+\.[0-9]+' README.md 2>/dev/null | head -1 || true)
+          if [ -n "$badge" ] && [ "$badge" != "$version" ]; then
+            echo "::error::README version badge ${badge} != source version ${version}."
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+      - name: Tag
+        run: |
+          git config user.name "nano-git-db"
+          git config user.email "release@nano-git-db.local"
+          git tag -a "v${{ steps.v.outputs.version }}" -m "v${{ steps.v.outputs.version }}"
+          git push origin "v${{ steps.v.outputs.version }}"
       - name: goreleaser
-        if: steps.tag.outputs.release == 'true'
         uses: goreleaser/goreleaser-action@v6
         with:
           version: '~> v2'
