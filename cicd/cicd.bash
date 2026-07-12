@@ -217,6 +217,13 @@ fMain(){
 		if [[ -n "${srcVersion}" ]] && git rev-parse -q --verify "refs/tags/v${srcVersion}" >/dev/null 2>&1; then
 			fEcho_Clean "WARNING: app.Version ${srcVersion} already tagged (v${srcVersion}) - bump it in source/app/app.go before releasing."
 		fi
+		## The README release badge is dynamic (tracks the release tag). If a hardcoded
+		## version badge is ever added, it must match app.Version - the release enforces
+		## this, warn locally too. (Skips cleanly when neither file/badge is present.)
+		badgeVersion="$(grep -oiP 'badge/[Vv]ersion-\K[0-9]+\.[0-9]+\.[0-9]+' "${dirPath_Base}/README.md" 2>/dev/null | head -1 || true)"
+		if [[ -n "${badgeVersion}" && "${badgeVersion}" != "${srcVersion}" ]]; then
+			fEcho_Clean "WARNING: README version badge ${badgeVersion} != app.Version ${srcVersion}."
+		fi
 
 		## Cross-compile via goreleaser (same .goreleaser.yaml the release uses), so
 		## the local run proves every target still builds without a second hand-rolled
@@ -333,11 +340,11 @@ fMain(){
 		fEcho_Clean "Screenshots regenerated"
 	fi
 
-	## Optional local hooks (not in the repo). Any private/hooks/claude/*.bash run
-	## here, before publish, so anything a hook regenerates gets committed in the
-	## same run. No-op when the folder is absent. A hook gets the repo base path as
-	## $1; a failing hook warns but does not abort the run.
-	declare hooksDir="${dirPath_Base}/../private/hooks/claude"
+	## Optional local pre-publish hooks (not committed, kept under ../private). Each
+	## *.bash there runs here before publish so anything a hook regenerates gets
+	## committed in the same run. No-op when the folder is absent. A hook gets the
+	## repo base path as $1; a failing hook warns but does not abort the run.
+	declare hooksDir="${dirPath_Base}/../private/cicd-hooks"
 	if [[ -d "${hooksDir}" ]]; then
 		fEcho_Section "Local hooks"
 		for nextHook in "${hooksDir}"/*.bash; do
