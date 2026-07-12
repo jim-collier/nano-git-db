@@ -65,3 +65,13 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Windows single-file .exe installer(s), built from the binaries goreleaser
+      # just cross-compiled into dist/ (NSIS runs on Linux, no wine), then attached
+      # to the release goreleaser created.
+      - name: Windows installers
+        run: |
+          sudo apt-get update && sudo apt-get install -y nsis
+          bash cicd/utility/windows-installer.bash "${{ steps.v.outputs.version }}"
+          gh release upload "v${{ steps.v.outputs.version }}" dist/*setup.exe --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

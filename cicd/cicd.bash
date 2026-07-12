@@ -45,6 +45,7 @@ if [[ -z "${doQuietly+x}" ]]; then
 	## Generic constants
 	declare  -i doQuietly=0
 	declare  -i doQuick=0  ## --quick: skip the slow stages (cross-builds, fuzz, profiler, screenshots, govulncheck, gosec)
+	declare  -i doNoArm=0  ## --no-arm: build/package amd64 only (arm64 is cheap here, so this is just a run-time trim)
 	declare  -i doPromptToContinue=1
 	declare -r  thisVersion="1.0.0-beta3"         ## Put you script's semantic version here.
 	declare -r  thisBuild="1mzfd9c"
@@ -98,8 +99,9 @@ fSyntax(){  { ((doQuietly)) || ((wasShown_Syntax)); } && return; wasShown_Syntax
 	#           X-------------------------------------------------------------------------------X
 	fEcho_Clean "Usage: ${meName} [options]"
 	fEcho_Clean "  -q, --quiet         Run unattended (no prompt) and quiet; flows to publish."
-	fEcho_Clean "      --quick         Skip the slow stages: cross-builds, fuzz, profiler,"
-	fEcho_Clean "                      screenshots, govulncheck + gosec (lint + tests still run)."
+	fEcho_Clean "      --quick         Skip the slow stages: cross-builds, packaging, fuzz,"
+	fEcho_Clean "                      profiler, screenshots, govulncheck + gosec (lint + tests run)."
+	fEcho_Clean "      --no-arm        Build/package amd64 only (skip arm64) to trim a full run."
 	fEcho_Clean "  -m, --message MSG   Commit message for publish (also --msg; -m MSG or -m=MSG)."
 	fEcho_Clean "                      With -q and no -m, a message is auto-generated."
 	fEcho_Clean "  -h, --help          Show this."
@@ -117,6 +119,7 @@ fMain(){
 	while (($#)); do case "${1}" in
 		-q|--quiet)                doQuietly=1                          ; shift ;;
 		--quick)                   doQuick=1                            ; shift ;;
+		--no-arm)                  doNoArm=1                            ; shift ;;
 		--message=*|--msg=*|-m=*)  cliMessage="${1#*=}"                 ; shift ;;
 		-m|--message|--msg)        cliMessage="${2-}"; shift; (($#)) && shift ;;
 		-h|--help)                 fCopyright; fAbout; fSyntax          ; return 0 ;;
@@ -159,7 +162,10 @@ fMain(){
 		fi
 		fEcho_Clean "Test script ..................: ${filePath_CICD_TestExec}"
 		if ((doQuick)); then
-		fEcho_Clean "Quick mode ...................: cross-builds + fuzz + profiler + screenshots + govulncheck + gosec skipped"
+		fEcho_Clean "Quick mode ...................: cross-builds + packaging + fuzz + profiler + screenshots + govulncheck + gosec skipped"
+		fi
+		if ((doNoArm)); then
+		fEcho_Clean "No-arm mode ..................: arm64 builds + packages skipped (amd64 only)"
 		fi
 		fEcho_Clean "Git commit and push script ...: ${gitAutomationScript}"
 		if [[ -n "${commitMessage}" ]]; then
@@ -201,12 +207,21 @@ fMain(){
 
 	if ((isCompileProject)); then
 
-		## Build (size-optimized native; build.bash owns the flags, vendor mode, and the bin/ output)
-		fEcho_Section "Build (native, size-optimized)"
-		"${dirPath_Base}/cicd/build.bash"
+		## Native debug build (symbols kept, unstripped) - drives the smoke check and
+		## is the artifact for manual profiling/debugging. The test, fuzz, and profiler
+		## stages below compile their own debug/bench binaries via `go test`.
+		fEcho_Section "Build (native debug)"
+		"${dirPath_Base}/cicd/build.bash" --debug
 		## Minimal execution test: --version prints one line and exits, never opening the
 		## TUI. Running the app for real stays a separate manual step before the merge.
-		fEcho_Clean "version check:"
+		fEcho_Clean "version check (debug):"
+		"${dirPath_Base}/bin/ngdb-debug" --version
+
+		## Native release build (size-optimized, stripped) - what gets dogfooded and
+		## screenshotted; goreleaser rebuilds the same optimized flags per-target below.
+		fEcho_Section "Build (native release, size-optimized)"
+		"${dirPath_Base}/cicd/build.bash"
+		fEcho_Clean "version check (release):"
 		"${filePath_ExecToTestAndInstall_BuildLocation}" --version
 		fEcho_Clean "Built ${filePath_ExecToTestAndInstall_BuildLocation}"
 
@@ -225,16 +240,28 @@ fMain(){
 			fEcho_Clean "WARNING: README version badge ${badgeVersion} != app.Version ${srcVersion}."
 		fi
 
-		## Cross-compile via goreleaser (same .goreleaser.yaml the release uses), so
-		## the local run proves every target still builds without a second hand-rolled
-		## path. --snapshot builds only (no archive/publish); release packaging lives in
-		## the release workflow. Skipped under --quick. macOS deferred (needs a Mac).
+		## Cross-compile + package via goreleaser (the same .goreleaser.yaml the release
+		## uses): binaries for linux/darwin/windows/freebsd (amd64+arm64), .deb/.rpm for
+		## linux, a tar.gz/zip per target, and checksums - all into dist/. --snapshot =
+		## build + package locally, no publish. Then the Windows single-file .exe
+		## installer(s) via NSIS. Skipped under --quick; --no-arm filters the goarch line
+		## to amd64 only. Deferred (need the target OS's own host): macOS .dmg, Windows
+		## .msi, FreeBSD .pkg - those ship as archives for now.
 		if ((doQuick)); then
-			fEcho_Section "Cross-compile (skipped: --quick)"
+			fEcho_Section "Cross-compile + package (skipped: --quick)"
 		else
-			fEcho_Section "Cross-compile (goreleaser build, all targets)"
-			( cd "${dirPath_Base}"  &&  GOFLAGS=  go run "${NGDB_GORELEASER}" build --snapshot --clean )
-			fEcho_Clean "Cross-compiled all targets (linux + windows, amd64 + arm64)"
+			fEcho_Section "Cross-compile + package (goreleaser: binaries, .deb/.rpm, archives, checksums)"
+			local grConfig=".goreleaser.yaml"
+			if ((doNoArm)); then
+				grConfig="${dirPath_Base}/cicd/artifacts/goreleaser-noarm.yaml"
+				mkdir -p "$(dirname "${grConfig}")"
+				sed 's/\[amd64, arm64\]/[amd64]/' "${dirPath_Base}/.goreleaser.yaml" > "${grConfig}"
+				fEcho_Clean "arm64 skipped (--no-arm): amd64-only matrix"
+			fi
+			( cd "${dirPath_Base}"  &&  GOFLAGS=  go run "${NGDB_GORELEASER}" release --snapshot --clean --config "${grConfig}" )
+			fEcho_Clean "Packaged into ${dirPath_Base}/dist/ (binaries, .deb/.rpm, archives, checksums)"
+			## Windows single-file .exe installer(s) from the just-built binaries (NSIS).
+			( cd "${dirPath_Base}"  &&  "${dirPath_Base}/cicd/utility/windows-installer.bash" "${srcVersion:-0.0.0}" )
 		fi
 
 	fi
@@ -628,3 +655,4 @@ fMain  "${@}"
 ##		- 20260704 JC: Added --quick (skip cross-builds and govulncheck).
 ##		- 20260704 JC: --quick also skips screenshots; screenshots.bash moved to github/utility/; run screenshots as a stage before publish; always leave a trailing blank line.
 ##		- 20260704 JC: Preflight now captures the commit message up front (Ctrl+C aborts) instead of a y/n gate; section headers get the letterbox rule; passes --no-prompt to the publish step so it doesn't re-ask.
+##		- 20260711 JC: Full cross-platform packaging via goreleaser (binaries for linux/darwin/windows/freebsd amd64+arm64, .deb/.rpm, archives, checksums) plus a Windows .exe installer; split native debug (test/profile) from release (dogfood/package) builds; added --no-arm.
