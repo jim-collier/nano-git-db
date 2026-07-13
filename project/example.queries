@@ -1,4 +1,4 @@
-## Predefined queries - sidecar to example.ddl (same base name, .queries extension).
+## Predefined queries - sister example to example.ddl (same base name, .queries extension).
 ## Same grammar as the DDL. A view's startup_named_query names one of these;
 ## the UIs also offer them in a per-view dropdown.
 

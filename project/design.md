@@ -12,16 +12,24 @@
 <!-- TOC -->
 
 - [Goal](#goal)
-- [Architecture](#architecture)
+- [CI/CD pipeline](#cicd-pipeline)
 - [Language and stack](#language-and-stack)
+- [Architecture](#architecture)
 - [Logical code organization](#logical-code-organization)
 - [Initial high-level features](#initial-high-level-features)
 	- [User-definable DDL](#user-definable-ddl)
 	- [Transaction log](#transaction-log)
+	- [Scripting triggers](#scripting-triggers)
+	- [Schema renames](#schema-renames)
 	- [Tunable options](#tunable-options)
+	- [Startup discovery and database registry](#startup-discovery-and-database-registry)
 	- [UI](#ui)
 	- [Predefined queries](#predefined-queries)
 	- [Optional granular access model](#optional-granular-access-model)
+	- [Startup notice and read-only mode](#startup-notice-and-read-only-mode)
+	- [Web login](#web-login)
+	- [Donations](#donations)
+	- [Encrypted transaction log](#encrypted-transaction-log)
 	- [Tables created automatically at new startup and verified in the background every startup](#tables-created-automatically-at-new-startup-and-verified-in-the-background-every-startup)
 		- [Always created and used](#always-created-and-used)
 			- [Users](#users)
@@ -87,12 +95,11 @@ One binary, four front-ends (see Architecture). UI is two pure-Go tiers: a **TUI
 One static binary, a shared core with four thin front-end adapters over it. Build the engine once; each interface is a mode selected at startup.
 
 ~~~text
-                 +----------- core engine (internal API) -----------+
+                 ------------ core engine (internal API) -------------
                  |  DDL parse . SQLite view . git tx-log . CRUD      |
-                 +--^----------^-----------^--------------^----------+
+                 -----------------------------------------------------
                     |          |           |              |
-   main dispatch:  CLI        Lua host    TUI            Web server
-   (by args)      (flag)   (gopher-lua)  (tview)   (net/http + embed + htmx)
+main dispatch:     CLI      Lua host      TUI         Web server
 ~~~
 
 - **CLI arg API** - stdlib `flag`, calls core directly.
