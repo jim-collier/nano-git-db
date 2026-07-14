@@ -1,0 +1,76 @@
+## Nano Git DB demo - a small issue tracker.
+## Every table also gets id / is_active / date_created / is_deleted for free.
+
+database:
+	tables:
+
+		table: issue
+			fields:
+				field: ref  ## short human handle, e.g. NGD-14
+					type: string
+				field: title
+					type: string
+				field: description
+					type: string
+				field: status  ## open | in_progress | closed
+					type: string
+				field: priority  ## low | medium | high
+					type: string
+				field: component
+					type: string
+				field: assignee
+					type: string
+				field: opened
+					type: datetime_local
+				field: parent_issue  ## hex id of a parent issue (epic/subtask), empty = top level
+					type: string
+			uniques:
+				ref
+			indexes:
+				status
+				assignee
+			features:
+				comments: yes
+				audit_trail: yes
+				uri_attachments: yes
+
+		table: person
+			fields:
+				field: screen_name
+					type: string
+				field: full_name
+					type: string
+				field: role  ## maintainer | contributor | reviewer
+					type: string
+				field: active
+					type: bool
+			uniques:
+				screen_name
+
+		table: component
+			fields:
+				field: name
+					type: string
+				field: lead
+					type: string
+			uniques:
+				name
+
+ui:
+	views:
+
+		view: "board"
+			startup_named_query: "Open issues"
+			layout:
+				block: 1
+					table: issue
+					type: tree_grid
+					parent_field: parent_issue
+
+		view: "people"
+			layout:
+				block: 1
+					table: person
+					type: grid
+
+	default_view: "board"
