@@ -14,7 +14,7 @@
 set -Eeuo pipefail
 
 dirPath_Self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exe="$dirPath_Self/../bin/ngdb"
+exe="$dirPath_Self/../../bin/ngdb"
 work="${1:-/tmp/ngdb-issues-demo}"
 
 [[ -x "$exe" ]] || { echo "no binary at $exe - run cicd/build.bash first" >&2; exit 1; }
