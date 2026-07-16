@@ -74,26 +74,42 @@ In each section, items are listed approximately from newest to oldest.
 
 - ✅ Repo scaffold: `go.mod`, package skeleton, arg-dispatch `main`, size-optimized build script, `.gitignore`. Compiles, vets, and gofmt-clean; all four front-ends stubbed and the web server serves its embedded asset.
 - ✅ DDL parser: `example.ddl` parses into an in-memory schema model through three layers (indent tree, type-directed values, semantic map). Tested, wired to `nanogitdb ddl <file>`.
+
 - ✅ SQLite view: builds and migrates the local `.sqlite` from the schema using pure-Go `modernc.org/sqlite`, with system columns and uniques/indexes, idempotent. Tested, wired to `nanogitdb build`. On-the-fly migration of existing data is a separate item below.
+
 - ✅ Transaction log: CSV read/write plus apply log to the SQLite view, with the log as source of truth. Append-only, field-granular replay (create/update/mark_delete/delete) in one tx. Tested, wired to `nanogitdb replay`. Added `row_id` to the entry (see design).
+
 - ✅ Core CRUD API: the single internal API every front-end and Lua calls, covering Create/Update/SetField/MarkDelete/Delete/Get/Query. Writes are log-first (append to truth, then apply to view), and it owns id, timestamp, and user stamping. Tested including a full rebuild from log. Validation, access, and triggers are separate items.
+
 - ✅ CLI front-end: full arg-based CRUD over the core, with verbs create/get/update/setnull/markdelete/delete/query each taking the same `<ddl> <sqlite> <logdir>` triple as replay and sync. Stateless and script-friendly until the config file lands. Writes stamp NANOGITDB_USER or the OS username, and `setnull` is its own verb so a literal "NULL" string stays expressible. Schema-op flags are their own backlog item.
+
 - ✅ Git sync: pull/merge/commit/push of the tx-log dir with a background loop, shelling out to `git`. Append conflicts auto-resolve via `merge=union`, and replay sorts by (date, tx_id) so clients converge. Tested including two-client convergence, wired to `nanogitdb sync`.
+
 - ✅ Lua host: `gopher-lua` bound to the same core CRUD as `db.{create,get,update,setfield,markdelete,delete,query}`, sandboxed to base/table/string/math/coroutine only with no os/io. Tested, wired to `nanogitdb --script`.
 	- Note: now an enterprise-edition feature. The host moved behind the script seam, so the open-source build has no scripting host and drops the gopher-lua dependency.
+
 - ✅ Auto tables: users, groups, and the opt-in feature tables (m:m, comments, audit, access, attachments), defined in the same DDL users write and embedded in one source file. Built idempotently at startup, with default groups (owners/admins/users/guests) seeded log-first so they replicate. audit_trail opts out of the universal system columns via the new `system_fields: no` key, and access_rows only appears when a table opts in to row_level_access. First-user membership in owners/admins is deferred until user rows exist.
+
 - ✅ TUI front-end: `tview`/`tcell`, both pure Go with the cross-compile intact. Table list (user tables first, then built-ins), a rows grid that stays empty until a table is opened, a create/edit form that writes only changed fields, and soft/hard delete behind a confirm modal, all through the shared CRUD API. Tested headlessly on tcell's simulation screen, including a full boot-open-quit pass. `nanogitdb --tui <ddl> <sqlite> <logdir>`.
+
 - ✅ Web UI: stdlib `net/http` + `html/template` + `embed` with vendored, pinned htmx (2.0.4). Table sidebar, a rows grid that renders nothing until a table is asked for, a create/edit form writing only changed fields, and soft/hard delete behind hx-confirm; the 127.0.0.1-only binding is the access control. Front-end bring-up and table metadata live in shared `schema.OpenClient`/`schema.Catalog`, so the four front-ends can't drift. `nanogitdb --serve <ddl> <sqlite> <logdir>`.
+
 - ✅ CI/CD: a manual pipeline in `cicd/cicd.bash` that builds native (size-reported), cross-compiles windows-amd64/linux-arm64/windows-arm64 (pure Go, no extra toolchains; macOS stays deferred), zips windows into `dist/`, runs test.bash (vet, gofmt, tests, smoke), verifies the module and runs govulncheck, then dogfoods and publishes. Profiling beyond the size report waits until there's something worth profiling.
 	- ✅ `-q/--quiet` (unattended, no prompt, flows to the publish step) and `-m/--message/--msg` (`-m MSG` or `-m=MSG`; auto-generated when `-q` and no `-m`), in both cicd.bash and the n8git publish helper. Stage output uses the existing `fEcho`/`fEcho_Clean` helpers (bracketed section headers, blank-line grouping).
 	- ✅ `--quick`: skip the slow stages (cross-builds + Windows packaging/install, fuzz, profiler, screenshots, govulncheck, gosec); native build, lint, quick tests, go mod verify, dogfood, and publish still run.
 	- ✅ Pipeline hardening: lint+format stage (`gofmt -w` + `staticcheck`), auto-discovered fuzz targets (`fuzz.bash` over the DDL/txlog/config parsers, seeds also run in the normal suite), `gosec` beside govulncheck (documented exclude list), and a non-gating profiler stage - samples the tx-log replay hot path into an inferno flamegraph (`cicd/artifacts/profiling/`, GFS-rotated) with a `flame-report.py` hotspot summary. Run log tee'd to `cicd/artifacts/lint/` for after-the-fact review (`lint-report.bash`).
 	- ✅ Full cross-platform packaging (non-`--quick`): goreleaser cross-builds linux/macOS/windows/freebsd for amd64+arm64 (all pure Go, one Linux box, no C toolchain), then packages `.deb`/`.rpm` for linux, a `.tar.gz`/`.zip` per target, and checksums. A single self-contained Windows `.exe` installer per arch is built with NSIS (`windows-installer.bash`/`.nsi`) - installs, adds to PATH, upgrades an existing install. Builds split: a native debug binary drives testing/profiling, an optimized release binary is what gets packaged and dogfooded. `--no-arm` trims a run to amd64 only (arm is cheap here, so it's opt-out not opt-in). Deferred (each needs the target OS's own tooling/signing host): macOS `.dmg`, Windows `.msi`, FreeBSD `.pkg` (ship as archives); AppImage + Flatpak.
+
 - ✅ Supply-chain hardening: vendored deps, `go mod verify`, `-mod=vendor`, and `govulncheck`, all wired into the pipeline. The first govulncheck run found five reachable Go-stdlib vulns; pinning `toolchain go1.26.4` cleared them and it now scans clean.
 
 #### Done - Bugs
 
 #### Done - New features and enhancements
+
+- ✅ Animated README demo (faux terminal, in cicd, skippable with `--quick`).
+	- Done: `cicd/utility/demo-video/demo-video.py` drives a real ngdb (TUI first, then the same data from the CLI) inside a decorated xterm on a private Xvfb, typing at a realistic pace with the odd fixed typo. It renders a 1920x1080 mp4 and a looping 960x540 gif with a fade-to-black loop seam.
+	- Done: the mp4 and full gif go to `../private/demo-video/{video,gif}` and GFS-rotate; the latest gif is copied to `assets/demo.gif` for the README. All content is anonymous (fake user/host, /tmp paths).
+	- Note: adapted from the sister silkterm recorder, minus its GPU and audio work; deps are python3 stdlib + ffmpeg + xterm/xdotool/Xvfb/xfwm4. A web-UI leg can be added later.
 
 - ✅ CI/CD improvements (all three repos).
 	- Done: a small hosted `ci.yml` per repo runs vet, gofmt, test, and build on push and pull request, with Go pinned. The full pipeline stays local.
