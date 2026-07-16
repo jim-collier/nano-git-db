@@ -55,7 +55,7 @@ fAbout(){ { ((doQuietly)) || ((wasShown_About)); } && return; wasShown_About=1;
 	#           X-------------------------------------------------------------------------------X
 	fEcho_Clean "Backs up a github directory to a versioned archive, and publishes changes, ie:"
 	fEcho_Clean "  • rar {flags} ../versions/{version}.rar  ../*"
-	fEcho_Clean "  • git stash push --include-untracked &&  git pull --no-ff  &&  git stash pop"
+	fEcho_Clean "  • git stash push --include-untracked &&  git pull --ff-only  &&  git stash pop"
 	fEcho_Clean "  • git add --all  &&  git commit"
 	fEcho_Clean "  • git push origin"
 	#           X-------------------------------------------------------------------------------X
@@ -188,9 +188,11 @@ fMain(){
 	## Sync with this branch's upstream if it has one. A brand-new local branch
 	## has nothing to pull; the push below sets its upstream on first publish.
 	if git rev-parse --abbrev-ref @{u} >/dev/null 2>&1; then
-		fEcho; fEcho "git pull --no-ff ..."
-		## --no-edit when quiet so a merge commit doesn't pop the editor.
-		if ((doQuietly)); then git pull --no-ff --no-edit; else git pull --no-ff; fi
+		fEcho; fEcho "git pull --ff-only ..."
+		## Fast-forward only: advance cleanly when the remote is ahead, but stop
+		## if local and remote diverged so a real merge stays a deliberate human
+		## step - never an auto-merge commit from an unattended publish.
+		git pull --ff-only
 	fi
 
 	## Stash pop
@@ -386,3 +388,4 @@ fMain  "${@}"
 ##			- --quiet now flows to git: pull --no-edit, commit -m so an unattended publish never opens an editor.
 ##			- Dropped the unused fParseArgs template block.
 ##		- 20260704 JC: Added --no-prompt/--yes/-y (skip the confirm y/n, keep the review display) for callers that already gated.
+##		- 20260716 JC: Pull is --ff-only (was --no-ff) - never auto-merge on publish; diverged branches stop for manual reconcile.
