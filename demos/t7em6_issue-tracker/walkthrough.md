@@ -5,7 +5,7 @@
 <!-- markdownlint-disable MD041 -- First line in a file should be a top-level heading -->
 # Nano Git DB - demo walkthrough
 
-This is a "script" for demonstratin the tool through the CLI, the terminal UI, and the local web UI, using the small issue-tracker schema in this folder (`issues.ddl` + `issues.queries`). All three front-ends share one core, so the same database opens identically in any of them.
+This is a "script" for demonstrating the tool through the CLI, the terminal UI, and the local web UI, using the small issue-tracker schema in this folder (`issues.ddl` + `issues.queries`). All three front-ends share one core, so the same database opens identically in any of them.
 
 The story to land: *the append-only tx-log is the database*. SQLite is a disposable local view rebuilt from the log, and the log is plain text that lives in git - so the whole database syncs, merges, and diffs like source code.
 
