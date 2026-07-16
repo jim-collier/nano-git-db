@@ -69,6 +69,26 @@ func TestCreateLoadRoundTrip(t *testing.T) {
 	}
 }
 
+func TestFindByName(t *testing.T) {
+	isolate(t)
+	ddlPath := writeDDL(t, t.TempDir())
+	if _, err := Create("issues", ddlPath, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg := FindByName("issues"); cfg == nil || cfg.DDLPath != ddlPath {
+		t.Fatalf("exact name lookup failed: %+v", cfg)
+	}
+	// A file extension on the query is ignored.
+	if cfg := FindByName("issues.ddl"); cfg == nil {
+		t.Fatal("name with extension should resolve")
+	}
+	// Unknown names and the empty string yield nil, not a panic.
+	if FindByName("nope") != nil || FindByName("") != nil {
+		t.Fatal("unknown/empty name should be nil")
+	}
+}
+
 func TestCreateRefusesDuplicate(t *testing.T) {
 	isolate(t)
 	ddlPath := writeDDL(t, t.TempDir())

@@ -25,17 +25,25 @@ import (
 	"github.com/jim-collier/nano-git-db/script"
 )
 
-// resolveArgs turns the front-end args into the open triple: an explicit
-// <ddl> <sqlite> <logdir>, else a lone DDL in the current directory. The web UI
-// has no interactive picker, so with neither it errors and asks for the paths.
+// resolveArgs turns the front-end args into the open triple: a registered
+// database name, else an explicit <ddl> <sqlite> <logdir>, else a lone DDL in
+// the current directory. The web UI has no interactive picker, so with none of
+// these it errors and asks for a name.
 func resolveArgs(args []string) (ddlPath, sqlitePath, logDir string, err error) {
+	if len(args) == 1 {
+		cfg := config.FindByName(args[0])
+		if cfg == nil {
+			return "", "", "", fmt.Errorf("unknown database %q; register it with --init or run ngdb with no arguments to see the known ones", args[0])
+		}
+		return cfg.DDLPath, cfg.SQLitePath, cfg.LogDir, nil
+	}
 	if len(args) >= 3 {
 		return args[0], args[1], args[2], nil
 	}
 	if d, s, l, ok := config.PWDTriple(); ok {
 		return d, s, l, nil
 	}
-	return "", "", "", fmt.Errorf("usage: ngdb --serve <ddl> <sqlite> <logdir> (or run from a directory containing a .ddl)")
+	return "", "", "", fmt.Errorf("usage: ngdb --serve <db> (or run from a directory containing a .ddl)")
 }
 
 //go:embed assets
@@ -44,9 +52,9 @@ var assetsFS embed.FS
 //go:embed templates
 var tplFS embed.FS
 
-// Run serves the web UI: ngdb --serve <ddl> <sqlite> <logdir>. With no
-// paths it uses a DDL in the current directory; the web front-end has no
-// picker, so with neither it requires the explicit triple.
+// Run serves the web UI: ngdb --serve <db>. With no name it uses a DDL in the
+// current directory; the web front-end has no picker, so with neither it
+// requires a database name.
 func Run(args []string) error {
 	ddlPath, sqlitePath, logDir, err := resolveArgs(args)
 	if err != nil {

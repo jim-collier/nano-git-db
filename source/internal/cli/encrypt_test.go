@@ -69,21 +69,16 @@ func TestOSSAlwaysFieldRefused(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chdir(old) })
 
-	capture(t, func() error { return Init(nil) }) // plain registration, no encryption
-	cfg, err := config.Load(filepath.Join(base, "people"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	sqlite := cfg.SQLitePath
+	capture(t, func() error { return Init(nil) }) // plain registration, no encryption (name = "people")
 
 	// The always-encrypted ssn cannot be written without encryption support.
-	if err := Run([]string{"create", ddlPath, sqlite, work, "person", "name=Ann", "ssn=secret"}); err == nil ||
+	if err := Run([]string{"create", "people", "person", "name=Ann", "ssn=secret"}); err == nil ||
 		!strings.Contains(err.Error(), "encryption") {
 		t.Fatalf("writing an always-encrypted field must fail in the open-source build; got %v", err)
 	}
 	// A row with only the non-always field still writes.
 	id := strings.TrimSpace(capture(t, func() error {
-		return Run([]string{"create", ddlPath, sqlite, work, "person", "name=Ann"})
+		return Run([]string{"create", "people", "person", "name=Ann"})
 	}))
 	if id == "" {
 		t.Fatal("a non-always-field create should succeed")
