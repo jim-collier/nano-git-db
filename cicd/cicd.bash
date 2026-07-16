@@ -100,7 +100,7 @@ fSyntax(){  { ((doQuietly)) || ((wasShown_Syntax)); } && return; wasShown_Syntax
 	fEcho_Clean "Usage: ${meName} [options]"
 	fEcho_Clean "  -q, --quiet         Run unattended (no prompt) and quiet; flows to publish."
 	fEcho_Clean "      --quick         Skip the slow stages: cross-builds, packaging, fuzz,"
-	fEcho_Clean "                      profiler, screenshots, govulncheck + gosec (lint + tests run)."
+	fEcho_Clean "                      profiler, screenshots, demo recording, govulncheck + gosec."
 	fEcho_Clean "      --no-arm        Build/package amd64 only (skip arm64) to trim a full run."
 	fEcho_Clean "  -m, --message MSG   Commit message for publish (also --msg; -m MSG or -m=MSG)."
 	fEcho_Clean "                      With -q and no -m, a message is auto-generated."
@@ -162,7 +162,7 @@ fMain(){
 		fi
 		fEcho_Clean "Test script ..................: ${filePath_CICD_TestExec}"
 		if ((doQuick)); then
-		fEcho_Clean "Quick mode ...................: cross-builds + packaging + fuzz + profiler + screenshots + govulncheck + gosec skipped"
+		fEcho_Clean "Quick mode ...................: cross-builds + packaging + fuzz + profiler + screenshots + demo + govulncheck + gosec skipped"
 		fi
 		if ((doNoArm)); then
 		fEcho_Clean "No-arm mode ..................: arm64 builds + packages skipped (amd64 only)"
@@ -365,6 +365,18 @@ fMain(){
 		fEcho_Section "Screenshots"
 		"${dirPath_Base}/utility/screenshots.bash" --no-build
 		fEcho_Clean "Screenshots regenerated"
+	fi
+
+	## Demo recording: mp4 + looping gif of the TUI-then-CLI walkthrough. mp4 + the
+	## full gif land in ../private/demo-video/{video,gif} (GFS-rotated, not
+	## committed); the latest gif is copied to assets/demo.gif for the README.
+	## Slow (headless capture + two encodes), so --quick skips it.
+	if ((doQuick)); then
+		fEcho_Section "Demo recording (skipped: --quick)"
+	elif [[ -x "${dirPath_Base}/cicd/utility/demo-video/demo-video.py" ]]; then
+		fEcho_Section "Demo recording"
+		python3 "${dirPath_Base}/cicd/utility/demo-video/demo-video.py" --no-build
+		fEcho_Clean "Demo mp4 + gif regenerated"
 	fi
 
 	## Optional local pre-publish hooks (not committed, kept under ../private). Each

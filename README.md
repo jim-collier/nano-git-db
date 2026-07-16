@@ -144,6 +144,10 @@ The open-source build can share and sync an encrypted database, but only the ent
 
 ## Screenshots
 
+A quick tour - the terminal UI, then the same database from the shell:
+
+<p align="center"><img src="assets/demo.gif" width="90%" alt="Browsing the tree-grid board and editing a record in the terminal UI, then querying and adding the same data from the CLI - where the whole database is just a folder of append-only text."/></p>
+
 The terminal UI, shown with an example team issue tracker. Click any image for the full-size version.
 
 <p align="center">
