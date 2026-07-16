@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jim-collier/nano-git-db/internal/core/config"
 )
 
 const personDDL = `
@@ -40,67 +42,104 @@ func capture(t *testing.T, fn func() error) string {
 	return string(out)
 }
 
-func TestCrudVerbsEndToEnd(t *testing.T) {
-	dir := t.TempDir()
-	ddlPath := filepath.Join(dir, "s.ddl")
+// regDB registers a database named "s" in an isolated registry so the
+// name-based verbs resolve to it, and returns its record.
+func regDB(t *testing.T) *config.DBConfig {
+	t.Helper()
+	base := t.TempDir()
+	config.SetBaseOverride(base)
+	t.Cleanup(func() { config.SetBaseOverride("") })
+
+	work := t.TempDir()
+	ddlPath := filepath.Join(work, "s.ddl")
 	if err := os.WriteFile(ddlPath, []byte(personDDL), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	dbPath := filepath.Join(dir, "view.sqlite")
-	logDir := filepath.Join(dir, "log")
+	logDir := filepath.Join(work, "log")
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	tri := []string{ddlPath, dbPath, logDir}
+	cfg, err := config.Create("s", ddlPath, logDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
+func TestCrudVerbsEndToEnd(t *testing.T) {
+	name := regDB(t).Name
 	run := func(args ...string) string {
 		return capture(t, func() error { return Run(args) })
 	}
-	pre := func(rest ...string) []string {
-		return append(append([]string{rest[0]}, tri...), rest[1:]...)
-	}
 
-	id := strings.TrimSpace(run(pre("create", "person", "name=Ann", "nick=A")...))
+	id := strings.TrimSpace(run("create", name, "person", "name=Ann", "nick=A"))
 	if len(id) != 32 {
 		t.Fatalf("create should print a 32-hex id, got %q", id)
 	}
 
-	got := run(pre("get", "person", id)...)
+	got := run("get", name, "person", id)
 	if !strings.Contains(got, "name: Ann") || !strings.Contains(got, "nick: A") {
 		t.Fatalf("get output missing fields:\n%s", got)
 	}
 
-	run(pre("update", "person", id, "name=Anne")...)
-	got = run(pre("get", "person", id)...)
+	run("update", name, "person", id, "name=Anne")
+	got = run("get", name, "person", id)
 	if !strings.Contains(got, "name: Anne") {
 		t.Fatalf("update did not land:\n%s", got)
 	}
 
-	run(pre("setnull", "person", id, "nick")...)
-	got = run(pre("query", `SELECT COUNT(*) AS n FROM "person" WHERE "nick" IS NULL`)...)
+	run("setnull", name, "person", id, "nick")
+	got = run("query", name, `SELECT COUNT(*) AS n FROM "person" WHERE "nick" IS NULL`)
 	if !strings.Contains(got, "1") {
 		t.Fatalf("setnull did not produce SQL NULL:\n%s", got)
 	}
 
-	run(pre("markdelete", "person", id)...)
-	got = run(pre("get", "person", id)...)
+	run("markdelete", name, "person", id)
+	got = run("get", name, "person", id)
 	if !strings.Contains(got, "is_deleted: 1") {
 		t.Fatalf("markdelete did not set is_deleted:\n%s", got)
 	}
 
-	run(pre("delete", "person", id)...)
-	got = run(pre("query", `SELECT COUNT(*) AS n FROM "person"`)...)
+	run("delete", name, "person", id)
+	got = run("query", name, `SELECT COUNT(*) AS n FROM "person"`)
 	if !strings.Contains(got, "0") {
 		t.Fatalf("delete left the row behind:\n%s", got)
 	}
 }
 
-func TestCreateRejectsBadAssign(t *testing.T) {
-	dir := t.TempDir()
-	ddlPath := filepath.Join(dir, "s.ddl")
-	if err := os.WriteFile(ddlPath, []byte(personDDL), 0o644); err != nil {
-		t.Fatal(err)
+// The database and table may be spelled explicitly with --db/--table (in any
+// order) instead of positionally, and a name resolves with or without its
+// file extension.
+func TestCrudSelectorForms(t *testing.T) {
+	name := regDB(t).Name
+	run := func(args ...string) string {
+		return capture(t, func() error { return Run(args) })
 	}
-	err := Run([]string{"create", ddlPath, filepath.Join(dir, "v.sqlite"), dir, "person", "no-equals"})
+
+	// fully explicit, flags leading in mixed order; name carries an extension
+	id := strings.TrimSpace(run("create", "--table=person", "--db="+name+".ddl", "name=Bo"))
+	if len(id) != 32 {
+		t.Fatalf("flag-form create should print a 32-hex id, got %q", id)
+	}
+	// space-form flags, table before db
+	got := run("get", "-t", "person", "-d", name, id)
+	if !strings.Contains(got, "name: Bo") {
+		t.Fatalf("flag-form get missing the row:\n%s", got)
+	}
+}
+
+// An unregistered name is a clear error, not a crash.
+func TestUnknownDatabase(t *testing.T) {
+	regDB(t) // isolates the registry; "nope" is not in it
+	err := Run([]string{"get", "nope", "person", "x"})
+	if err == nil || !strings.Contains(err.Error(), "unknown database") {
+		t.Fatalf("want an unknown-database error, got %v", err)
+	}
+}
+
+func TestCreateRejectsBadAssign(t *testing.T) {
+	name := regDB(t).Name
+	err := Run([]string{"create", name, "person", "no-equals"})
 	if err == nil || !strings.Contains(err.Error(), "field=value") {
 		t.Fatalf("want a field=value error, got %v", err)
 	}
@@ -110,28 +149,19 @@ func TestCreateRejectsBadAssign(t *testing.T) {
 // rename in place AND a full rebuild-from-log into a fresh view (the alias
 // translation is what makes the second part work).
 func TestRenameOpsEndToEnd(t *testing.T) {
-	dir := t.TempDir()
-	ddlPath := filepath.Join(dir, "s.ddl")
-	if err := os.WriteFile(ddlPath, []byte(personDDL), 0o644); err != nil {
-		t.Fatal(err)
+	cfg := regDB(t)
+	name := cfg.Name
+	run := func(args ...string) string {
+		return capture(t, func() error { return Run(args) })
 	}
-	dbPath := filepath.Join(dir, "view.sqlite")
-	logDir := filepath.Join(dir, "log")
 
-	out := capture(t, func() error {
-		return Run([]string{"create", ddlPath, dbPath, logDir, "person", "name=Ann", "nick=Nan"})
-	})
-	id := strings.TrimSpace(out)
+	id := strings.TrimSpace(run("create", name, "person", "name=Ann", "nick=Nan"))
 
-	capture(t, func() error {
-		return Run([]string{"--rename-table", ddlPath, dbPath, "person", "people"})
-	})
-	capture(t, func() error {
-		return Run([]string{"--rename-field", ddlPath, dbPath, "people", "nick", "handle"})
-	})
+	run("--rename-table", name, "person", "people")
+	run("--rename-field", name, "people", "nick", "handle")
 
 	// the DDL now has the new names with the old ones as aliases
-	src, err := os.ReadFile(ddlPath)
+	src, err := os.ReadFile(cfg.DDLPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,20 +172,18 @@ func TestRenameOpsEndToEnd(t *testing.T) {
 	}
 
 	// renamed in place: the existing view answers under the new names
-	out = capture(t, func() error {
-		return Run([]string{"get", ddlPath, dbPath, logDir, "people", id})
-	})
+	out := run("get", name, "people", id)
 	if !strings.Contains(out, "Ann") || !strings.Contains(out, "handle") {
 		t.Fatalf("get after rename: %s", out)
 	}
 
-	// rebuild-from-log into a FRESH view: the log still says person/nick
-	fresh := filepath.Join(dir, "fresh.sqlite")
-	capture(t, func() error { return Run([]string{"replay", ddlPath, fresh, logDir}) })
-	out = capture(t, func() error {
-		return Run([]string{"query", ddlPath, fresh, logDir,
-			`SELECT "name","handle" FROM "people" WHERE "is_deleted"=0`})
-	})
+	// rebuild-from-log into a FRESH view: drop the sqlite and replay by name.
+	// The log still says person/nick, so only the alias map makes this work.
+	if err := os.Remove(cfg.SQLitePath); err != nil {
+		t.Fatal(err)
+	}
+	run("replay", name)
+	out = run("query", name, `SELECT "name","handle" FROM "people" WHERE "is_deleted"=0`)
 	if !strings.Contains(out, "Ann") || !strings.Contains(out, "Nan") {
 		t.Fatalf("replayed data missing: %s", out)
 	}

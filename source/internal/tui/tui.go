@@ -21,14 +21,22 @@ import (
 	"github.com/jim-collier/nano-git-db/script"
 )
 
-// Run is the TUI entry point. With an explicit <ddl> <sqlite> <logdir> triple
-// it opens that database directly; with no paths it uses a DDL sitting in the
-// current directory, else shows the registry picker (choose / create / open).
+// Run is the TUI entry point. Given a registered database name it opens that
+// database directly; with an explicit <ddl> <sqlite> <logdir> triple it opens
+// those paths; with nothing it uses a DDL sitting in the current directory,
+// else shows the registry picker (choose / create / open).
 func Run(args []string) error {
 	applyTheme(themeIndexByName(config.LoadSettings().Theme)) // so the picker is themed too
 	dec := runGate(nil)
 	if !dec.proceed { // quit at the startup notice
 		return nil
+	}
+	if len(args) == 1 {
+		cfg := config.FindByName(args[0])
+		if cfg == nil {
+			return fmt.Errorf("unknown database %q; register it with --init or run ngdb with no arguments to pick one", args[0])
+		}
+		return runOpen(cfg.DDLPath, cfg.SQLitePath, cfg.LogDir, cfg, dec)
 	}
 	if len(args) >= 3 {
 		return runOpen(args[0], args[1], args[2], nil, dec)

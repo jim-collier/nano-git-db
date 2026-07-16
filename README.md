@@ -219,7 +219,7 @@ Grab a release binary (once releases start), or build from source. It's one stat
 
 ## Quick start
 
-You define the database in a plain-text schema file (the DDL). No SQL, no migrations - you edit the file, and the local database migrates itself. Three files matter: your `schema.ddl`, a tx-log directory (the shared source of truth, git-syncable), and a local `.sqlite` (a rebuildable view - never synced). The examples below pass all three explicitly; once a database is registered, the TUI can just show you a picker (see [Startup discovery](syntax.md#startup-discovery-and-the-database-registry)).
+You define the database in a plain-text schema file (the DDL). No SQL, no migrations - you edit the file, and the local database migrates itself. Under the hood three things matter: your `schema.ddl`, a tx-log directory (the shared source of truth, git-syncable), and a local `.sqlite` (a rebuildable view - never synced). You register those once and then just refer to the database by name; ngdb keeps track of the paths (see [Startup discovery](syntax.md#startup-discovery-and-the-database-registry)).
 
 ### A minimal schema
 
@@ -277,29 +277,29 @@ ui:
 
 ### Basic CLI
 
-Every data verb takes the same `<ddl> <sqlite> <logdir>` trio (here `.` is the tx-log dir - the current directory), then its own arguments. Working with the `todo.ddl` above:
+Register your schema once, then refer to the database by name - you never spell out the schema, view, or log paths again:
 
 ```
-# build the local view from the schema
-ngdb build todo.ddl todo.sqlite
+# register the todo.ddl in this directory as the database "todo"
+ngdb --init
 
 # add a top-level task; the command prints the new row's id
-ngdb create todo.ddl todo.sqlite . task title="Ship v1" status=open
+ngdb create todo task title="Ship v1" status=open
 
 # add a subtask under it (paste the parent id from above)
-ngdb create todo.ddl todo.sqlite . task title="Write docs" parent_task=<parent-id>
+ngdb create todo task title="Write docs" parent_task=<parent-id>
 
 # add a comment to a task, then list its comments
-ngdb comment  todo.ddl todo.sqlite . task <id> "kickoff notes"
-ngdb comments todo.ddl todo.sqlite . task <id>
+ngdb comment  todo task <id> "kickoff notes"
+ngdb comments todo task <id>
 
 # read it back
-ngdb query todo.ddl todo.sqlite . "SELECT title, status FROM task WHERE is_deleted = 0"
+ngdb query todo "SELECT title, status FROM task WHERE is_deleted = 0"
 ```
 
-Prefer a UI? `ngdb --tui todo.ddl todo.sqlite .` opens the terminal UI over the same database, and `ngdb --serve todo.ddl todo.sqlite .` serves a local web UI on `127.0.0.1:8765`.
+The database name is the first argument; if you'd rather be explicit, `--db=todo --table=task` flags work in any order too. Run a bare `ngdb` to see a picker of your registered databases.
 
-Tired of typing paths? Run `ngdb --init` in the directory with your `todo.ddl` to register it; after that, a bare `ngdb` shows a picker of your databases (or run `--init` inside a git repo to auto-place the synced tx-log under it). See [Startup discovery](syntax.md#startup-discovery-and-the-database-registry).
+Prefer a UI? `ngdb --tui todo` opens the terminal UI over that database, and `ngdb --serve todo` serves a local web UI on `127.0.0.1:8765`. Run `--init` inside a git repo to auto-place the synced tx-log under it. See [Startup discovery](syntax.md#startup-discovery-and-the-database-registry).
 
 ## Full syntax reference
 

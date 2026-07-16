@@ -106,6 +106,11 @@ In each section, items are listed approximately from newest to oldest.
 
 #### Done - New features and enhancements
 
+- ✅ Address a database by name on the CLI and in the UIs, not by its file paths.
+	- Done: every CRUD verb now names a registered database (`ngdb create issues task ...`) and looks up its ddl/sqlite/log from the registry; the old three-path form is gone for data verbs. The name is the first positional, or `--db`/`--table` flags (both accepted, in any order), and resolves with or without a file extension.
+	- Done: `build`/`replay`/`sync`/`gc` and the rename verbs take a name too, keeping an explicit-path form for pre-registration use; `--tui <db>` and `--serve <db>` open a registered database directly.
+	- Done: demo recorder, `demos/` walkthrough + `seed.bash`, README, and syntax.md all switched to the name-based form; the recorder's TUI beat lands on a standard dark theme instead of high-contrast.
+
 - ✅ Animated README demo (faux terminal, in cicd, skippable with `--quick`).
 	- Done: `cicd/utility/demo-video/demo-video.py` drives a real ngdb (TUI first, then the same data from the CLI) inside a decorated xterm on a private Xvfb, typing at a realistic pace with the odd fixed typo. It renders a 1920x1080 mp4 and a looping 960x540 gif with a fade-to-black loop seam.
 	- Done: the mp4 and full gif go to `../private/demo-video/{video,gif}` and GFS-rotate; the latest gif is copied to `assets/demo.gif` for the README. All content is anonymous (fake user/host, /tmp paths).

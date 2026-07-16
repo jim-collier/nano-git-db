@@ -276,47 +276,50 @@ Trigger code gets the sandboxed `db.*` CRUD API (no `os`/`io`, no `dofile`). Wri
 
 ## Command-line interface
 
-Every data verb takes the same `<ddl> <sqlite> <logdir>` triple, then its own arguments. Run `ngdb` with no matching verb to print this usage.
+Every verb names a registered database as its first argument - `<db>` below (extension optional). Register one with `--init`; ngdb looks up its schema, view, and log from the registry, so those paths never appear on the command line. Run `ngdb` with no matching verb to print this usage.
 
 Schema and log:
 
 ```
-ngdb ddl <file>                     parse a DDL and print a summary
-ngdb build <ddl> <sqlite>           build / migrate a SQLite view from a DDL
-ngdb replay <ddl> <sqlite> <dir>    rebuild the view from a tx-log dir
-ngdb sync <logdir>                  commit + pull/push the tx-log via git
-ngdb sync <ddl> <sqlite> <dir>      sync, then migrate the view and replay
-ngdb gc <ddl> <logdir>              collect entries of long-deleted rows (gc_age_days)
+ngdb ddl <file>       parse a DDL file and print a summary
+ngdb build <db>       build / migrate the SQLite view
+ngdb replay <db>      rebuild the view from the tx-log
+ngdb sync <db>        sync the tx-log via git, then migrate and replay
+ngdb gc <db>          collect entries of long-deleted rows (gc_age_days)
 ```
 
-Data (each after the `<ddl> <sqlite> <logdir>` triple):
+Data (each takes a `<db>`, then a `<table>`):
 
 ```
-create ... <table> f=v [f=v ...]         insert a row; prints its id
-get ... <table> <id>                     print one row
-update ... <table> <id> f=v [f=v ...]    set fields
-setnull ... <table> <id> <field>         set a field to SQL NULL
-markdelete ... <table> <id>              soft-delete
-delete ... <table> <id>                  hard-delete
-query ... <sql>                          read-only SQL against the view
+create <db> <table> f=v [f=v ...]      insert a row; prints its id
+get <db> <table> <id>                  print one row
+update <db> <table> <id> f=v [f=v ...] set fields
+setnull <db> <table> <id> <field>      set a field to SQL NULL
+markdelete <db> <table> <id>           soft-delete
+delete <db> <table> <id>               hard-delete
+query <db> <sql>                       read-only SQL against the view
 ```
+
+The database and table may also be given as flags in any order instead of positionally: `--db=<name>` / `-d <name>` and `--table=<name>` / `-t <name>` (e.g. `ngdb get --db=todo --table=task <id>`).
 
 Opt-in features (the table must enable them in its DDL `features:` block):
 
 ```
-comment ... <table> <id> <text>            add a comment to a row
-comments ... <table> <id>                  list a row's comments
-attachuri ... <table> <id> <uri> [desc]    attach a link-in-place URI
-attachfile ... <table> <id> <path> [desc]  copy a file in and attach it
-attachments ... <table> <id>               list a row's attachments
+comment <db> <table> <id> <text>           add a comment to a row
+comments <db> <table> <id>                 list a row's comments
+attachuri <db> <table> <id> <uri> [desc]   attach a link-in-place URI
+attachfile <db> <table> <id> <path> [desc] copy a file in and attach it
+attachments <db> <table> <id>              list a row's attachments
 ```
 
 Schema ops (rewrite the DDL file and the SQLite view; the old name becomes an alias so existing log entries still replay):
 
 ```
-ngdb --rename-table <ddl> <sqlite> <old> <new>
-ngdb --rename-field <ddl> <sqlite> <table> <old> <new>
+ngdb --rename-table <db> <old> <new>
+ngdb --rename-field <db> <table> <old> <new>
 ```
+
+The low-level `build`/`replay`/`sync`/`gc` and rename verbs also accept an explicit-path form (`build <ddl> <sqlite>`, `replay <ddl> <sqlite> <dir>`, `sync <logdir>`, `gc <ddl> <logdir>`) for use before a database is registered; a bare `sync <logdir>` still just reconciles a log directory with git.
 
 `setnull` is its own verb so a literal `NULL` string stays expressible via `update`. An empty value (`f=`) is the empty string.
 
@@ -346,8 +349,8 @@ The first argument selects the front-end; the default is the CLI.
 
 ```
 ngdb <verb> ...            CLI (above)
-ngdb --tui  <ddl> <sqlite> <logdir>          terminal UI
-ngdb --serve <ddl> <sqlite> <logdir>         local web UI on 127.0.0.1:8765
+ngdb --tui  [<db>]                           terminal UI (no name: pick / create a db)
+ngdb --serve [<db>]                          local web UI on 127.0.0.1:8765
 ngdb --script <file.lua> <ddl> <sqlite> <logdir>   run a Lua script (enterprise build)
 ngdb --donate                                ways to support the project
 ngdb --version                               print the version and exit (also -v)
@@ -361,12 +364,12 @@ In the TUI, press `T` to pick a colour theme (three dark, three light; the defau
 
 ## Startup discovery and the database registry
 
-When `--tui` or a bare `ngdb` is run without the explicit triple, it finds a database instead of erroring:
+When `--tui` or a bare `ngdb` is run without a database name, it finds one instead of erroring:
 
 - A lone `*.ddl` in the current directory is opened directly (its view defaults beside it, the tx-log dir is that directory).
 - Otherwise the TUI shows a picker of registered databases (unopenable ones flagged with the reason), plus "Create new database" and "Open existing ...".
 
-`--serve` has no picker, so with no paths it uses a `$PWD` DDL if present, else asks for the explicit triple.
+`--serve` has no picker, so with no name it uses a `$PWD` DDL if present, else asks for one.
 
 Registered databases are per-database TOML records at `<user-config>/ngdb/<name>/config.toml`, where `<user-config>` is `$XDG_CONFIG_HOME` (else `~/.config`) on Linux, `%AppData%` on Windows, `~/Library/Application Support` on macOS. Read-only system locations (`$XDG_CONFIG_DIRS`, `%ProgramData%`) are also searched. A record holds:
 

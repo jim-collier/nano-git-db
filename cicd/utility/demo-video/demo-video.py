@@ -75,8 +75,8 @@ def log(msg):
 def run(cmd, **kw):
 	return subprocess.run(cmd, check=True, **kw)
 
-def out_of(cmd):
-	return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
+def out_of(cmd, env=None):
+	return subprocess.run(cmd, check=True, capture_output=True, text=True, env=env).stdout
 
 
 ##•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
@@ -93,6 +93,7 @@ class Rec:
 		self.bin     = os.environ.get("NGDB_BIN", str(REPO / "bin/ngdb"))
 		self.work    = Path(tempfile.mkdtemp(prefix="ngdb-demo-"))
 		self.home    = self.work / "home"
+		self.cfg     = self.home / ".config"   # hermetic registry base (XDG_CONFIG_HOME)
 		self.keep    = args.keep_work
 		self.app     = None
 		self.ff      = None
@@ -233,6 +234,7 @@ class Rec:
 			+ "\\[\\e[0m\\]" + gray_flag)
 		e = self.env()
 		e.update(SHELL="/bin/bash", HOME=str(self.home),
+			XDG_CONFIG_HOME=str(self.cfg),   # same registry the build-time populate used
 			PATH=f"{self.home}/bin:{os.environ['PATH']}",
 			PS1=ps1, HISTFILE="/dev/null",
 			NANOGITDB_USER="demo", NANOGITDB_HOST="workstation")
@@ -394,41 +396,45 @@ def prep_home(rec, rng):
 ##	Demo database (anonymous) via the shared builder
 
 def build_db(rec):
-	# the tracker lands in the fake home as ~/team-issues (co-located ddl + sqlite
-	# + tx-log), and the terminal opens there, so every command stays short
-	out_of(["bash", str(DEMO_DB), str(rec.home), rec.bin])
+	# the tracker lands in the fake home as ~/team-issues (the synced ddl + tx-log),
+	# registered under the name "issues" so on-camera commands are just the name.
+	# HOME + XDG_CONFIG_HOME match the on-camera xterm, so the registry it writes
+	# is the one the recording reads.
+	env = dict(os.environ, HOME=str(rec.home), XDG_CONFIG_HOME=str(rec.cfg))
+	out_of(["bash", str(DEMO_DB), str(rec.home), rec.bin], env=env)
 	rec.tracker = rec.home / "team-issues"
 
 
 ##•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 ##	Scenes - TUI first, then CLI, then a quiet outro (web leg comes later)
-##	The terminal opens in ~/team-issues, so the ddl/sqlite/log triple is just
-##	`issues.sqlite .` and every command stays short and legible.
+##	The database is registered as "issues", so every command just names it -
+##	no ddl/sqlite/log paths on screen. The terminal opens in ~/team-issues so
+##	the closing `ls` shows the folder that database actually is.
 
-TRIPLE = "issues.ddl issues.sqlite ."
+DB = "issues"
 # columns typed in the order ngdb prints them (it alphabetizes), so what you type
 # is what you see - no confusing reorder on screen
 QUERY_OPEN = "select assignee, status, title from task where status = 'open'"
 
 def seg_tui(r, t):
 	# launch straight into the tree_grid board, walk it, open a row, cycle a theme
-	t.cmd(f"ngdb --tui {TRIPLE}", settle=2.2)
+	t.cmd(f"ngdb --tui {DB}", settle=2.2)
 	t.key("a"); time.sleep(1.8)              # load the board block
 	t.keys("Down", 4, hz=3.4); time.sleep(0.6)
 	t.keys("Up", 2, hz=3.0); time.sleep(0.6)
 	t.key("Return"); time.sleep(2.0)         # open the edit form for a task
 	t.key("Escape"); time.sleep(0.9)
 	t.key("shift+t"); time.sleep(1.5)        # theme picker
-	t.keys("Down", 2, hz=2.6); time.sleep(0.6)
+	t.keys("Down", 1, hz=2.6); time.sleep(0.6)  # standard dark theme (not high-contrast)
 	t.key("Return"); time.sleep(1.6)         # apply a theme
 	t.key("q"); time.sleep(1.0)              # back out of the TUI
 
 def seg_cli(r, t):
 	# the same data from the shell; a write shows up on the next read
-	t.cmd(f'ngdb query {TRIPLE} "{QUERY_OPEN}"', settle=2.4)
-	t.cmd(f'ngdb create {TRIPLE} task title="Add dark mode" '
+	t.cmd(f'ngdb query {DB} "{QUERY_OPEN}"', settle=2.4)
+	t.cmd(f'ngdb create {DB} task title="Add dark mode" '
 		'status=open priority=high assignee=demo', settle=2.0)
-	t.cmd(f'ngdb query {TRIPLE} "{QUERY_OPEN}"', settle=2.4)
+	t.cmd(f'ngdb query {DB} "{QUERY_OPEN}"', settle=2.4)
 	# the payoff: the whole database is this folder - schema, view, append-only log
 	t.cmd("ls -1", settle=2.6)
 
