@@ -3,7 +3,7 @@
 
 First off, thanks for taking the time to contribute!
 
-All types of contributions are encouraged and valued. See the [Table of Contents](#table-of-contents) for different ways to help and details about how this project handles them. Please make sure to read the relevant section before making your contribution. It will make it a lot easier for us maintainers and smooth out the experience for all involved. The community looks forward to your contributions.
+All types of contributions are encouraged and valued. See the [Table of Contents](#table-of-contents) for different ways to help and details about how this project handles them. Please read the relevant section before contributing. It makes it easier for the maintainer and smoother for everyone involved.
 
 > And if you like the project, but just don't have time to contribute, that's fine. There are other easy ways to support the project and show your appreciation, which we would also be very happy about:
 > - Star the project
@@ -46,7 +46,7 @@ If you then still feel the need to ask a question and need clarification, we rec
 - Provide as much context as you can about what you're running into.
 - Provide project and platform versions, depending on what seems relevant.
 
-We will then take care of the issue as soon as possible.
+I'll then take care of the issue as soon as I can.
 
 <!--
 You might want to create a separate issue tag for questions and include it in this description. People should then tag their issues accordingly.
@@ -101,9 +101,9 @@ We use GitHub issues to track bugs and errors. If you run into an issue with the
 
 Once it's filed:
 
-- The project team will label the issue accordingly.
-- A team member will try to reproduce the issue with your provided steps. If there are no reproduction steps or no obvious way to reproduce the issue, the team will ask you for those steps and mark the issue as `needs-repro`. Bugs with the `needs-repro` tag will not be addressed until they are reproduced.
-- If the team is able to reproduce the issue, it will be marked `needs-fix`, as well as possibly other tags (such as `critical`), and the issue will be left to be [implemented by someone](#your-first-code-contribution).
+- The issue gets labeled accordingly.
+- I'll try to reproduce it from your steps. If there are none, or no obvious way to reproduce it, I'll ask for steps and mark the issue `needs-repro`. Bugs tagged `needs-repro` are not addressed until they're reproduced.
+- Once reproduced, it's marked `needs-fix` (plus other tags such as `critical` as warranted) and queued to be fixed.
 
 <!-- You might want to create an issue template for bugs and errors that can be used as a guide and that defines the structure of the information to be included. If you do so, reference it here in the description. -->
 
