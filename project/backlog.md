@@ -54,71 +54,19 @@ In each section, items are listed approximately from newest to oldest.
 
 ### New features and enhancements
 
-- ✅ CI/CD improvements (all three repos). First live release fires on the next `dev` -> `main` merge (cuts v0.1.0).
-	- ✅ Minimal hosted CI: a small `ci.yml` per repo runs vet + gofmt + test + build on push/PR to `dev` and `main`, Go pinned. Safety net only; the full local pipeline stays local.
-	- ✅ Dev branch + release on main: adopted a `dev` integration branch (features merge to `dev`; a `dev` -> `main` merge triggers `release.yml`, which tags `v<Version>` and publishes). Version is authoritative in a source var (bumped by hand); the build stamps commit provenance separately; the release skips if the version wasn't bumped.
-	- ✅ goreleaser for release packaging: floss + vendor build/archive/checksum via goreleaser; enterprise reuses its garble build and archives itself (goreleaser's prebuilt builder is Pro-only). The local cross-compile now runs `goreleaser build` too, replacing the hand-rolled one.
-	- ✅ Pin tool versions: staticcheck/govulncheck/gosec/goreleaser pinned in one place; a dependabot config brings dependency + toolchain bumps as grouped PRs against `dev`.
-	- ✅ README badges: CI status, latest release, Go version (public repo; private repos get the CI badge only, since shields.io can't read them).
+- 🛠️ Enterprise license validation. Phones home to confirm an active subscription and allows a set number of copies at once. Does not fail if it cannot reach the server for a while, and does not bind to specific hardware.
+	- Note: scheme decided in the enterprise repo; implementation is a later phase.
 
-- ✅ Donations model:
-	- ✅ "Support nano-git-db" button in Help|About (or `--donate`), showing the URL it opens. The `donate` package holds one blurb + one link (DONATE.md); CLI prints the blurb and URL line-spaced, TUI shows a dialog, web shows a Support page. Open-source-only (enterprise turns `donate.Enabled` off).
-	- ✅ `## Support nano-git-db` section in README.md - adapted from SilkTerm's (name + socials fit a git/database tool).
-	- ✅ `DONATE.md` - adapted from SilkTerm's.
-	- ✅ `.github/FUNDING.yml` - added (custom link to DONATE.md live; platform handles commented, see FYI).
-	- ✅ Locked with `.github/CODEOWNERS`:
-		- ✅ Isolated Help|About dialog TUI, web UI, CLI code file (each front-end's donate.go + the `donate` package + donate.html, all listed in CODEOWNERS).
-		- ✅ /.github/CODEOWNERS  @jim-collier
-		- ✅ /DONATE.md  @jim-collier
-		- ✅ /.github/FUNDING.yml  @jim-collier
-	- ✅ Remove ssh signing keys model (for now) - dropped the signed-address-table code (canonical bytes, signer script, ops doc, test gate); the deferred idea is kept under Defer below.
-	- FYI to-do (owner):
-		- Enable a GitHub Sponsors profile for the Sponsor badge/link to go live (else it 404s)
-		- fill in `.github/FUNDING.yml` handles.
-
-- 🛠️ Enterprise license validation scheme. Commonly used, phones home to verify active, allows N copies simultaneously. But doesn't fail if can't phone home for some time. Doesn't bind to specific hardware or anything.
-	- Scheme decided in the enterprise repo (`research-license-validation.md`); implementation is a later phase.
-
-- ✅ Web UI: basic login. The web server has no authentication today. Localhost binding is the only gate, and every request acts as one default user, so it cannot be safely exposed.
-	- Done: an explicit `web_mode` setting (default `local`) picks the shape. `local` identifies the single user with no password - the git repo account, else the OS user - and refuses to serve if a proxy header ever appears, so an accidentally exposed box never runs passwordless. `proxied` requires a login: a session cookie, checked against a local creds file of PBKDF2-hashed passwords (stdlib `crypto/pbkdf2`, no new dependency) kept outside the synced tree; the signed-in user drives the data layer so the existing user/group permissions apply. Add a login with the `webuser` verb. Stronger methods stay an enterprise concern.
-	- On a local machine, identify the user with no password. Use the git repository account name, or the operating system user when there is no repository.
-	- Behind a reverse proxy, require a username and password. The stronger methods belong to the enterprise edition.
-	- The signed-in user must reach the data layer, so the existing user and group permissions apply to the web view.
-	- Settle first how to tell a local machine apart from a proxied one, since a proxy also connects from localhost. Prefer an explicit setting over guessing.
-		- Decided (owner, 2026-07-04): explicit mode setting plus a header safety-net. A setting (e.g. `web_mode: local|proxied`, default `local`) is authoritative: `local` = auto-identify, no password; `proxied` = require username + password. Safety-net: if the setting is left at `local` but an incoming request carries a forwarded-for / proxy header, refuse to serve (or force login) so an accidental exposure can never run passwordless. Local identity resolves to the git repo account, else the OS user (reuse the existing default-user resolution). Still to design at build time: where proxied credentials live (a local credentials file outside the git-synced tree, bcrypt-hashed, is the likely answer since syncing password hashes via git is undesirable).
-
-- 🛠️ Optional ability to store data encrypted in transaction log. (But always decrypted in user's local SQLite.)
-	- Done (phase 1, field-value encryption): new `internal/core/crypt` uses AES-256-GCM under a per-value subkey derived from the entry's unique tx_id, so nonce reuse can't happen at any record count. Only field values encrypt; every other column stays clear, since git merge and replay need them. Encryption happens on the write path and decryption just before replay; an undecryptable value binds NULL so ciphertext never reaches the view. All four front-ends inherit it. Verified end to end: sensitive data never appears in the synced log, replay with the key restores it, and without the key it shows empty and warns. Full design is in design.md.
-	- Reason: So that the data (in txlog) is not readable by the git hosting company, or anyone that gets ahold of it via git.
-	- Gotcha: To still work as a txlog that git can sync and reconcile, some data will need to be stored in the clear - probably everything except for the actual field data values.
-		- So some data will necessarily be leaky, except for the actual data values.
-	- ✅ The encryption key will need to be stored outside the repo. (E.g. a random binary -> base64 key stored in a text file, e.g. in the same place the user would store their own custom named queries.)
-	- ✅ The application should have CLI `--init` and `--encrypt=on` flags, that can set this up automatically. Flags can specify both git location, and db name. The machine-visible and user locations can be auto-computed from there, or overridden with additional flags.
-		- ✅ Keys are per-db. Not per-user or per-machine. (But each user must get ahold of the key outside of git methods. E.g. Discord chat or something.)
-		- ✅ Encryption can be turned on and off at will, per-host. Some data fields in the txlog will be stored in the clear, some encrypted. The app should be able to tell which is which (via a mechanism that doesn't add much weight to the txlog), and act accordingly.
-			- But by default, if a user has the key file in their user directory for the db in question, fields should be encrypted - unless the user specifically turns encryption off for themselves, for that particular database (persistently).  ## Done: local pref lives in the registry record (unsynced); 'auto' = encrypt-if-key-present.
-	- ✅ If the txlog contains encrypted data, but the user either has no key file, for now, warn them with an instruction to obtain it somehow.
-		- But for now, allow them to proceed, able to read and write unencrypted data only. In the future this may be optionally more locked-down by an owner or admin. (In the latter case it might be truly enforceable only if running as a web server.)
-	- ✅ If the txlog contains encrypted data, and the user has they key file but explicitly disabled encryption for themselves for the db in question, warn them so at least they are aware.
-		- Same caveat about allowing them to continue, while in the future possibly offering a way to enforce encryption-only.
-	- 🛠️ Additional hierarchical DDL keys:
-		- ✅ `encryption: always|never|auto`  ## Default 'auto', meaning only if initialized with `--encrypt=on`, or enabled later per-user config.  ## Done at database/table/field; outermost always|never locks lower levels; all-auto defers to local pref.
-			- 'always' means that encryption is enabled at that level, and can't be overridden lower in the hierarchy (only higher).
-				- If an encryption key file is not available, writing data is prohibited, for whatever fields are affected. (And only unencrypted data can be read.)
-			- 'never' means that encryption is disabled at that level, and can't be overridden lower in the hierarchy (only higher).
-			- 'auto' means whatever the db was initialized with, or user decides. Can be overridden higher OR lower in the heirarchy.
-			- Use-cases:
-				- Certain field must ALWAYS be encrypted (e.g. SSN.)
-				- Certain fields must NEVER be encrypted (maybe some field used by a txlog preprocessor or something).
-				- All fields of a certain table must ALWAYS be encrypted.
-		- 🛠️ Levels this label can be applied: "database:", "table:", "field:", "ddl:" (which refers to whole self as a file), "named_queries:", "config:". Basically at any level that ultimately contains fields, and/or whole text files other than the whole txlog itself. (Even though actual encryption happens at the field-level only - this is just different ways to define what fields are or are not encrypted.  ## database/table/field DONE; ddl/named_queries/config (file-level) deferred with file encryption below.
-	- 🔘 If the entire database is set with encryption on, then by default the DDL, code file[s], and named queries file in git, are encrypted too. Will need CLI flags to locally decrypt and re-encrypt them, so that they can be edited. (This would also have the benefit of protecting such files from accidental modification.)  ## Deferred (phase 2): file-level encryption of the DDL/.queries/.lua.
-	- 🔘 Future enhancements:
-		- 🔘 Ability to use multiple keys - e.g. by externally-managed responsibility level, team, etc.
-		- 🔘 Ability to use public/private keys in addition to standard symmetric - e.g. able to read the configuration and DDL (and even some fields) with the public key, but cryptographically unable to reencrypt them without the private key (thus making them fundamentally read-only for certain externally-managed roles - in an enforceable way even for this distributed system, that doesn't rely on the data being locked away on a central web server).
-		- 🔘 Think of a way that public keys could be securely distributed *in-application* (necessarily being synced by git). E.g., public key(s) and possibly even private keys, are encrypted with the main symmetric key, stored somehow in the main git-synced folder.
-		- 🔘 Allow local symmetric keys to be generated with a passphrase.
-		- 🔘 Allow re-encrypting existing data with a new key. (Perhaps key management could be done the way LUKS does it - with manageable keys that simply unlock a fixed bigger key. Would have to carefully think through how to accomplish such a thing, with such a distributed architecture.)
+- 🛠️ Optional encrypted data in the transaction log. The local SQLite copy is always decrypted.
+	- Reason: keep the log unreadable to the git host, or to anyone who gets the repo.
+	- Note: some columns stay clear so git can still merge and replay (table and field names, row id, user, host, counts). Only the field values are private.
+	- Done: phase one encrypts field values. A field with no key reads back empty and warns, so ciphertext never reaches the view. Full design is in design.md.
+	- ✅ Key lives outside the repo, one per database. Users share it out of band.
+	- ✅ `--init --encrypt=on` sets up the key and turns encryption on. It can be toggled per host afterward.
+	- ✅ With encrypted data present but no key, the user is warned and can still read and write the clear fields.
+	- ✅ DDL `encryption: always|never|auto` at the database, table, and field level. `always` and `never` lock the levels below; `auto` defers to the local preference.
+	- 🔘 Deferred (phase two): also encrypt the DDL, query, and script sidecar files, with flags to decrypt and re-encrypt them for editing.
+	- 🔘 Future: multiple keys by role or team; public and private keys for read-only roles; passphrase-generated keys; re-encrypting existing data with a new key.
 
 ### Done
 
@@ -146,6 +94,25 @@ In each section, items are listed approximately from newest to oldest.
 #### Done - Bugs
 
 #### Done - New features and enhancements
+
+- ✅ CI/CD improvements (all three repos).
+	- Done: a small hosted `ci.yml` per repo runs vet, gofmt, test, and build on push and pull request, with Go pinned. The full pipeline stays local.
+	- Done: a `dev` integration branch. Features merge to `dev`, and a `dev` -> `main` merge cuts a release. The version is authoritative in a source var, and the release skips if it was not bumped.
+	- Done: goreleaser builds, archives, and checksums the release for the floss and vendor repos. The local cross-compile uses the same config.
+	- Done: linter and tool versions pinned in one place. A dependabot config brings dependency and toolchain bumps as grouped pull requests.
+	- Done: README badges for CI status, latest release, and Go version.
+	- Note: the first live release fires on the next `dev` -> `main` merge (cuts v1.0.0-beta.1).
+
+- ✅ Donations model.
+	- Done: a "Support nano-git-db" entry in Help/About and `--donate` shows one blurb and one link (DONATE.md). The CLI prints it, the TUI shows a dialog, and the web UI shows a Support page. Open-source build only.
+	- Done: a Support section in README.md, a DONATE.md, and a `.github/FUNDING.yml`.
+	- Done: the donate files and package are locked to the maintainer via `.github/CODEOWNERS`.
+	- Note: to finish going live, enable a GitHub Sponsors profile and fill in the FUNDING.yml handles.
+
+- ✅ Web UI basic login.
+	- Done: an explicit `web_mode` setting (default `local`) picks the shape. `local` identifies the single user with no password (the git repo account, else the OS user) and refuses to serve if a proxy header appears, so an exposed box never runs passwordless. `proxied` requires a login: a session cookie checked against a local file of PBKDF2-hashed passwords, kept outside the synced tree. Add a user with the `webuser` verb.
+	- Done: the signed-in user drives the data layer, so the existing user and group permissions apply to the web view.
+	- Note: stronger sign-in methods stay an enterprise concern.
 
 - ✅ Exe name should be 'ngdb'.
 	- Done: the built binary and all user-facing references (CLI/TUI/web usage, version line, web title) are now `ngdb`; `cmd/nanogitdb` renamed to `cmd/ngdb`. The module path `nano-git-db` and the `NANOGITDB_USER`/`NANOGITDB_HOST` env vars are unchanged.
