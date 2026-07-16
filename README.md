@@ -8,7 +8,7 @@
 ![Go](https://img.shields.io/github/go-mod/go-version/jim-collier/nano-git-db?filename=source/go.mod&logo=go&logoColor=white)
 [![CI](https://github.com/jim-collier/nano-git-db/actions/workflows/ci.yml/badge.svg)](https://github.com/jim-collier/nano-git-db/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/jim-collier/nano-git-db)](https://github.com/jim-collier/nano-git-db/releases/latest)
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](license.md)
 ![Lifecycle: Beta](https://img.shields.io/badge/Lifecycle-Beta-yellow)
 ![Support](https://img.shields.io/badge/Support-Maintained-brightgreen)
 
@@ -48,7 +48,7 @@
 	<tr style="border: none; border-collapse: collapse;">
 		<td style="border: none; border-collapse: collapse;"><img src="assets/logo.png" alt="NGDB" width="320"/></td>
 		<td style="border: none;">Nano Git DB is a tiny, simple, yet powerful distributed multi-user database.<br /><br />A separately licensed enterprise edition adds encrypted data, so the git host cannot read it, plus Lua scripting for triggers and automation.<br /><br />The database schema uses an easy, user-friendly text-based DDL; no SQL knowledge necessary. A single small executable contains the CLI, TUI, and web interfaces (use any or all).<br /><br />The database schema can be modified at will, while all data remains backward and forward compatible.<br /><br />Any number of databases can be run concurrently on a machine. Git is used for the "distributed" feature. (And Nano Git DB is perfect for a more robust team issue tracking database for each git repo - and just such a schema is included as a useful example.)<br /><br />But git is not required for local-only use, nor for server-hosted web browser access.<br /><br />Runs on Linux, Windows, macOS.</td>
-	</tr style="border: none; border-collapse: collapse;">
+	</tr>
 </table>
 
 <!--
@@ -83,7 +83,7 @@
 
 Why indeed, when:
 
-- There are a possibly hundreds "tiny databases" out there.
+- There are possibly hundreds of tiny databases out there.
 - There are maybe dozens of databases that can work across a team or teams, via git.
 - There are countless databases that can be defined and managed without SQL, including those that opt for a user-friendly text-based DDL.
 - There are uncountable databases that run as a single, small, cross-platform executable. (Plus the database file.)
@@ -94,7 +94,7 @@ But: None embody all of those at the same time.
 
 - Can sync records across multiple users, and auto-resolve conflicts, via `git`.
 
-- Any number of databases are supported (all at the same with multiple running tiny instances).
+- Any number of databases can run at once on one machine, each its own small instance.
 
 - Git is not required - it can also work independently as a single-user database. (And even as a server via built-in web server.)
 
@@ -104,7 +104,7 @@ But: None embody all of those at the same time.
 	- A full CRUD TUI interface
 	- A full CRUD self-hosting local web UI. (That can be used locally, and/or shared to the network.)
 
-- SQLite3 is used as the back-end. (The `.sqlite` file is not synced via git though, it is stored outside the repo.)
+- SQLite is used as the back-end. (The `.sqlite` file is not synced via git though, it is stored outside the repo.)
 
 - A text file is used separately, as a transaction log for git syncing/auto-merging. The executable regularly checks it for updates, and exports local updates to it as they happen. Changes to the file are imported to the local `.sqlite` database, that all the interfaces use.
 
@@ -200,7 +200,7 @@ Optional (planned - see the predefined-queries backlog item):
 
 ## Example use-cases
 
-- A project lead can create a small issue tracking database to share with the the entire team, via the shared git repo. (With separate databases per repo.)
+- A project lead can create a small issue tracking database to share with the entire team, via the shared git repo. (With separate databases per repo.)
 	- Issue management can be automated via command-line API, and/or managed by each user with the TUI (even over SSH), a central web UI, or a per-user local-only web UI.
 
 - Github projects can have more robust issue tracking (or any number of arbitrary databases), that repo users only have to install a single small executable to participate with.
@@ -318,16 +318,16 @@ Even a few dollars a month is meaningful. Or just buy me a coffee.
 
 **Get the word out**
 
-Tell other developers and teams on various socials how this has changed your life!
+Tell other developers and teams about it on the socials you use.
 
 - [r/git](https://www.reddit.com/r/git/)
-- [Hacker News](news.ycombinator.com)
+- [Hacker News](https://news.ycombinator.com)
 - [r/selfhosted](https://www.reddit.com/r/selfhosted/)
 
 ## Copyright and license
 
 > Copyright © 2025-26 Jim Collier (ID: 1cv◂‡Vᛦ)<br />
-> Licensed under the [GNU Affero General Public License v3.0](LICENSE) (`AGPL-3.0-only`). No warranty.
+> Licensed under the [GNU Affero General Public License v3.0](license.md) (`AGPL-3.0-only`). No warranty.
 
 The AGPL's network-use clause is deliberate. If you run a modified nano-git-db as a network service, you must offer users your source. A separately licensed enterprise edition is also available under different terms. Outside contributions need a signed [Contributor License Agreement](CLA.md). See [contributing.md](contributing.md).
 <!--

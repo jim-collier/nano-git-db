@@ -15,8 +15,8 @@ Even a few dollars a month is meaningful. Or just buy me a coffee.
 
 ## Get the word out
 
-Most importantly: Tell other developers and teams on various socials how this has changed your life:
+Tell other developers and teams about it on the socials you use.
 
 - [r/git](https://www.reddit.com/r/git/)
-- [Hacker News](news.ycombinator.com)
+- [Hacker News](https://news.ycombinator.com)
 - [r/selfhosted](https://www.reddit.com/r/selfhosted/)

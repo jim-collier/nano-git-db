@@ -331,7 +331,7 @@ Core tables like Users, Groups, etc. also inherit things like audit trail, comme
 
 These tables, the ones are automatically managed, have `cascade_delete` enabled if appropriate.
 
-These are defined in a single source code file (not end-user editable), with the [same DDL language](project/example.ddl) that users use.
+These are defined in a single source code file (not end-user editable), with the [same DDL language](example.ddl) that users use.
 
 #### Always created and used
 
