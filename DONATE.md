@@ -1,6 +1,6 @@
 # Support nano-git-db
 
-nano-git-db is written and maintained by one programmer in his spare time. If you like this thing, use it often, and/or it saves you time - sponsoring it keeps it moving!
+nano-git-db is written and maintained by one programmer in his spare time. If you use it often, or it saves you time, sponsoring it keeps it moving.
 
 Even a few dollars a month is meaningful. Or just buy me a coffee.
 
@@ -15,7 +15,7 @@ Even a few dollars a month is meaningful. Or just buy me a coffee.
 
 ## Get the word out
 
-Tell other developers and teams about it on the socials you use.
+Tell other developers and teams about it wherever you hang out.
 
 - [r/git](https://www.reddit.com/r/git/)
 - [Hacker News](https://news.ycombinator.com)
