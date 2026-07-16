@@ -527,16 +527,18 @@ def place(rec, out, no_rotate):
 	dst = out_dir / f"ngdb-demo_{stamp}.{ext}"
 	shutil.copy2(out, dst)
 	mb = dst.stat().st_size / (1 << 20)
-	rotate(out_dir, "ngdb-demo", ext, no_rotate)
-	log(f"{sub}: {dst} ({mb:.1f} MiB)")
+	# copy the README asset from the fresh render first: rotation below may rename
+	# dst into a GFS bucket, so copying from `out` keeps this independent of it.
 	if ext == "gif":
 		if mb <= GIF_ASSET_MAX_MB:
 			asset = REPO / "assets" / "demo.gif"
-			shutil.copy2(dst, asset)
+			shutil.copy2(out, asset)
 			log(f"README asset: {asset} ({mb:.1f} MiB)")
 		else:
 			log(f"WARNING: gif is {mb:.1f} MiB (> {GIF_ASSET_MAX_MB}); "
 				"assets/demo.gif left untouched - trim the script or lower fps/colors")
+	rotate(out_dir, "ngdb-demo", ext, no_rotate)
+	log(f"{sub}: {dst} ({mb:.1f} MiB)")
 
 
 ##•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
