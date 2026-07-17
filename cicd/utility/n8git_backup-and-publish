@@ -86,7 +86,7 @@ fSyntax(){  { ((doQuietly)) || ((wasShown_Syntax)); } && return; wasShown_Syntax
 fMain(){
 
 	## Settings
-	local baseCmdArgs="a -r0 -ep1 -rr -ol -m3"
+	local baseCmdArgs="a -r0 -ep1 -rr -m3"
 
 	## Generic variables
 	local -i wasShown_Copyright=0; local -i wasShown_About=0; wasShown_Syntax=0
