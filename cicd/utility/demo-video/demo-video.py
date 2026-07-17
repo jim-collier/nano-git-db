@@ -6,7 +6,7 @@
 ##		realistic pace (variable wpm, occasional fixed typos, a beat before flags),
 ##		and encode two deliverables from one script:
 ##		  video: 1920x1080 mp4 (h264), kept in private/ (not committed)
-##		  gif:   960x540 looping, obvious fade-to-black loop seam, -> assets/demo.gif
+##		  gif:   960x540 looping, hard cut to a 2s black loop seam, -> assets/demo.gif
 ##		The terminal is a plain faux window (Monaspace Argon SemiBold, dark-gray
 ##		bg, pale-green text, an anonymous colorized user@host prompt); nothing real
 ##		- fake user `demo`, host `workstation`, /tmp paths - ever reaches a frame.
@@ -59,9 +59,8 @@ NAME_TONES = [(224, 144, 158), (222, 178, 134), (150, 190, 214),
 USERS = ["juno", "vela", "orion", "wren", "koa", "ada", "sol", "iris", "nova", "remy"]
 HOSTS = ["nimbus", "vela", "atlas", "birch", "cobalt", "delta", "ember", "flint", "onyx", "quartz"]
 
-FADE_S      = 0.45         # loop-seam fade in/out to black (both ends)
 LEAD_S      = 0.7          # quiet lead kept before the first keystroke
-TAIL_HOLD_S = 1.2          # freeze the final frame before the closing fade
+BLACK_S     = 2.0          # hard cut to a solid black hold at the loop seam
 
 PROFILES = {
 	"video": dict(size=(1920, 1080), fps=60, font_pt=22, ext="mp4"),
@@ -475,23 +474,19 @@ def find_flash(raw, work):
 		raise RuntimeError(f"sync flash not found (max YAVG {best_y})")
 	return best_t
 
-def vf_chain(rec, total):
-	# freeze the final frame for a beat (tpad), then: fade in from black at the
-	# start and out to black at the end. On a looping gif that black bridge makes
-	# the loop boundary obvious and lands back on the same opening frame.
-	fo = max(0.0, total - FADE_S)
+def vf_chain(rec):
+	# hard-cut to a solid black hold at the end (no fade). On a looping gif that
+	# black bridge marks the loop boundary and lands back on the opening frame; a
+	# single static black tail also compresses far smaller than a graduated fade.
 	return (f"fps={rec.fps},format=rgb24,"
-		f"tpad=stop_mode=clone:stop_duration={TAIL_HOLD_S:.3f},"
-		f"fade=t=in:st=0:d={FADE_S:.3f},"
-		f"fade=t=out:st={fo:.3f}:d={FADE_S:.3f}")
+		f"tpad=stop_mode=add:stop_duration={BLACK_S:.3f}:color=black")
 
 def encode(rec, video_end_e):
 	flash_vt = find_flash(rec.raw, rec.work)
 	log(f"sync flash at t={flash_vt:.3f}s")
 	trim = flash_vt + (rec.t0_e - rec.flash_e)
 	content = video_end_e - rec.t0_e              # seconds of real capture after trim
-	total = content + TAIL_HOLD_S                 # tpad freezes the last frame past that
-	vf = vf_chain(rec, total)
+	vf = vf_chain(rec)
 	cut = ["-ss", f"{trim:.3f}", "-t", f"{content:.3f}"]   # read only real content; tpad extends
 	out = rec.work / f"demo.{rec.p['ext']}"
 	if rec.p["ext"] == "mp4":
@@ -604,5 +599,5 @@ if __name__ == "__main__":
 
 ##	Script history:
 ##		- 20260715 JC: Created. Adapted from the silkterm demo recorder, minus
-##		  GPU/audio: xterm faux window, TUI-then-CLI script, fade-to-black loop
+##		  GPU/audio: xterm faux window, TUI-then-CLI script, hard black loop
 ##		  seam, mp4 (private) + gif (private + assets/demo.gif).
