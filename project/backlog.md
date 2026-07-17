@@ -123,7 +123,7 @@ In each section, items are listed approximately from newest to oldest.
 	- Done: goreleaser builds, archives, and checksums the release for the floss and vendor repos. The local cross-compile uses the same config.
 	- Done: linter and tool versions pinned in one place. A dependabot config brings dependency and toolchain bumps as grouped pull requests.
 	- Done: README badges for CI status, latest release, and Go version.
-	- Note: the first live release fires on the next `dev` -> `main` merge (cuts v1.0.0-alpha.1).
+	- Done: first live release cut - v1.0.0-alpha.1 published (archives, .deb/.rpm, checksums, and Windows installers across linux/macOS/windows/freebsd on amd64+arm64).
 
 - ✅ Donations model.
 	- Done: a "Support nano-git-db" entry in Help/About and `--donate` shows one blurb and one link (DONATE.md). The CLI prints it, the TUI shows a dialog, and the web UI shows a Support page. Open-source build only.
