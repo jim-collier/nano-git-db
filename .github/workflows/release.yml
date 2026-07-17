@@ -59,7 +59,7 @@ jobs:
           git tag -a "v${{ steps.v.outputs.version }}" -m "v${{ steps.v.outputs.version }}"
           git push origin "v${{ steps.v.outputs.version }}"
       - name: goreleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
           args: release --clean
