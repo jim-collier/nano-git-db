@@ -149,7 +149,7 @@ func doData(verb string, args []string) error {
 	// every other verb needs a table: the --table flag, else the next positional
 	if table == "" {
 		if len(rest) < 1 {
-			return fmt.Errorf("usage: ngdb %s <db> <table> ...", verb)
+			return fmt.Errorf("usage: ngdb %s <db> <table> <args>", verb)
 		}
 		table, rest = rest[0], rest[1:]
 	}
