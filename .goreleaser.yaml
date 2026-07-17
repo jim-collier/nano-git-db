@@ -1,0 +1,57 @@
+# Release packaging for the public binary. Pure-Go, so every OS/arch below
+# cross-compiles from one Linux box with no C toolchain. Produces: binaries for
+# linux/darwin/windows/freebsd (amd64+arm64), .deb/.rpm for linux (nfpm), a
+# tar.gz/zip archive per target, and checksums. The Windows single-file .exe
+# installer is built separately (cicd/utility/windows-installer.bash, NSIS).
+# Deferred (need the target OS's own tooling/signing host): macOS .dmg, Windows
+# .msi, FreeBSD .pkg - those ship as archives for now.
+# app.Version is authoritative in source; only app.Build (short commit) is stamped.
+version: 2
+project_name: ngdb
+
+builds:
+  - id: ngdb
+    dir: source
+    main: ./cmd/ngdb
+    binary: ngdb
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -mod=vendor
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/jim-collier/nano-git-db/app.Build={{ .ShortCommit }}
+    goos: [linux, darwin, windows, freebsd]
+    goarch: [amd64, arm64]  # flow-style so cicd.bash --no-arm can filter this line
+
+archives:
+  - id: ngdb
+    formats: [tar.gz]
+    name_template: "ngdb-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+# nfpm packages only the linux builds (it ignores the other OSes automatically).
+nfpms:
+  - id: ngdb
+    package_name: ngdb
+    formats: [deb, rpm]
+    maintainer: nano-git-db maintainers <release@nano-git-db.local>
+    description: Local-first database on an append-only, git-syncable transaction log.
+    license: AGPL-3.0-or-later
+    homepage: https://github.com/jim-collier/nano-git-db
+    bindir: /usr/bin
+    contents:
+      - src: ./license.md
+        dst: /usr/share/doc/ngdb/license.md
+      - src: ./README.md
+        dst: /usr/share/doc/ngdb/README.md
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  github:
+    owner: jim-collier
+    name: nano-git-db

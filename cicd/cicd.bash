@@ -37,16 +37,15 @@ if [[ -z "${doQuietly+x}" ]]; then
 	declare     dirPath_Source="${dirPath_Base}/source"
 	declare     filePath_ExecToTestAndInstall_BuildLocation="${dirPath_Base}/bin/${exeName}"  ## cicd/build.bash outputs straight to bin/
 	declare     filePath_ExecToTestAndInstall_FinalHome="${dirPath_Base}/bin/${exeName}"
-	declare     filePath_Exec_Zip_Win_x86_64="${dirPath_Base}/dist/${exeName}-windows-x86_64.zip"
 	declare     filePath_CICD_TestExec="${dirPath_Base}/cicd/test.bash"
 	declare     gitAutomationScript="${dirPath_Base}/cicd/utility/n8git_backup-and-publish"
 	declare -ra preferredInstallPaths_Bash=("${HOME}/synced/0-0/common/exec/util/linux/bash"                    "/usr/local/sbin/"                                )  ## First one that exists, wins
 	declare -ra preferredInstallPaths_Linux_x8664=("${HOME}/synced/0-0/common/exec/util/linux/bin"              "/usr/local/sbin/"                                )  ## First one that exists, wins
-	declare -ra preferredInstallPaths_Win_x8664=("${HOME}/synced/0-0/common/exec/util/mswin/cli/by-self/win64"  "${HOME}/synced/0-0/common/exec/util/win/win64jc" )  ## First one that exists, wins
 
 	## Generic constants
 	declare  -i doQuietly=0
-	declare  -i doQuick=0  ## --quick: skip the slow stages (cross-builds, fuzz, profiler, screenshots, govulncheck, gosec)
+	declare  -i doQuick=0  ## --quick: skip the slow stages (cross-builds, fuzz, profiler, govulncheck, gosec)
+	declare  -i doNoArm=0  ## --no-arm: build/package amd64 only (arm64 is cheap here, so this is just a run-time trim)
 	declare  -i doPromptToContinue=1
 	declare -r  thisVersion="1.0.0-beta3"         ## Put you script's semantic version here.
 	declare -r  thisBuild="1mzfd9c"
@@ -100,8 +99,9 @@ fSyntax(){  { ((doQuietly)) || ((wasShown_Syntax)); } && return; wasShown_Syntax
 	#           X-------------------------------------------------------------------------------X
 	fEcho_Clean "Usage: ${meName} [options]"
 	fEcho_Clean "  -q, --quiet         Run unattended (no prompt) and quiet; flows to publish."
-	fEcho_Clean "      --quick         Skip the slow stages: cross-builds, fuzz, profiler,"
-	fEcho_Clean "                      screenshots, govulncheck + gosec (lint + tests still run)."
+	fEcho_Clean "      --quick         Skip the slow stages: cross-builds, packaging, fuzz,"
+	fEcho_Clean "                      profiler, demo recording, govulncheck + gosec."
+	fEcho_Clean "      --no-arm        Build/package amd64 only (skip arm64) to trim a full run."
 	fEcho_Clean "  -m, --message MSG   Commit message for publish (also --msg; -m MSG or -m=MSG)."
 	fEcho_Clean "                      With -q and no -m, a message is auto-generated."
 	fEcho_Clean "  -h, --help          Show this."
@@ -119,6 +119,7 @@ fMain(){
 	while (($#)); do case "${1}" in
 		-q|--quiet)                doQuietly=1                          ; shift ;;
 		--quick)                   doQuick=1                            ; shift ;;
+		--no-arm)                  doNoArm=1                            ; shift ;;
 		--message=*|--msg=*|-m=*)  cliMessage="${1#*=}"                 ; shift ;;
 		-m|--message|--msg)        cliMessage="${2-}"; shift; (($#)) && shift ;;
 		-h|--help)                 fCopyright; fAbout; fSyntax          ; return 0 ;;
@@ -142,7 +143,6 @@ fMain(){
 	fResolvePath  gitAutomationScript                          "${gitAutomationScript}"                            ; readonly gitAutomationScript
 	fResolvePath  filePath_ExecToTestAndInstall_BuildLocation  "${filePath_ExecToTestAndInstall_BuildLocation}"  0 ; readonly filePath_ExecToTestAndInstall_BuildLocation
 	fResolvePath  filePath_ExecToTestAndInstall_FinalHome      "${filePath_ExecToTestAndInstall_FinalHome}"      0 ; readonly filePath_ExecToTestAndInstall_FinalHome
-	fResolvePath  filePath_Exec_Zip_Win_x86_64                 "${filePath_Exec_Zip_Win_x86_64}"                 0 ; readonly filePath_Exec_Zip_Win_x86_64
 
 	## Validate
 	[[ -d "${dirPath_Base}"            ]]  ||  fThrowError "Path not found: '${dirPath_Base}'"
@@ -159,11 +159,13 @@ fMain(){
 		if ((isCompileProject)); then
 		fEcho_Clean "Executable to build ..........: ${filePath_ExecToTestAndInstall_BuildLocation}"
 		fEcho_Clean "Executable final location ....: ${filePath_ExecToTestAndInstall_FinalHome}"
-		fEcho_Clean "Win x86_64 zip location ......: ${filePath_Exec_Zip_Win_x86_64}"
 		fi
 		fEcho_Clean "Test script ..................: ${filePath_CICD_TestExec}"
 		if ((doQuick)); then
-		fEcho_Clean "Quick mode ...................: cross-builds + fuzz + profiler + screenshots + govulncheck + gosec skipped"
+		fEcho_Clean "Quick mode ...................: cross-builds + packaging + fuzz + profiler + demo + govulncheck + gosec skipped"
+		fi
+		if ((doNoArm)); then
+		fEcho_Clean "No-arm mode ..................: arm64 builds + packages skipped (amd64 only)"
 		fi
 		fEcho_Clean "Git commit and push script ...: ${gitAutomationScript}"
 		if [[ -n "${commitMessage}" ]]; then
@@ -205,31 +207,61 @@ fMain(){
 
 	if ((isCompileProject)); then
 
-		## Build (size-optimized native; build.bash owns the flags, vendor mode, and the bin/ output)
-		fEcho_Section "Build (native, size-optimized)"
-		"${dirPath_Base}/cicd/build.bash"
+		## Native debug build (symbols kept, unstripped) - drives the smoke check and
+		## is the artifact for manual profiling/debugging. The test, fuzz, and profiler
+		## stages below compile their own debug/bench binaries via `go test`.
+		fEcho_Section "Build (native debug)"
+		"${dirPath_Base}/cicd/build.bash" --debug
 		## Minimal execution test: --version prints one line and exits, never opening the
 		## TUI. Running the app for real stays a separate manual step before the merge.
-		fEcho_Clean "version check:"
+		fEcho_Clean "version check (debug):"
+		"${dirPath_Base}/bin/ngdb-debug" --version
+
+		## Native release build (size-optimized, stripped) - what gets dogfooded and
+		## screenshotted; goreleaser rebuilds the same optimized flags per-target below.
+		fEcho_Section "Build (native release, size-optimized)"
+		"${dirPath_Base}/cicd/build.bash"
+		fEcho_Clean "version check (release):"
 		"${filePath_ExecToTestAndInstall_BuildLocation}" --version
 		fEcho_Clean "Built ${filePath_ExecToTestAndInstall_BuildLocation}"
 
-		## Cross-compile: pure Go, so every target builds here with no extra toolchains.
-		## build.bash names cross outputs bin/ngdb-<os>-<arch>[.exe]. Skipped under --quick.
-		if ((doQuick)); then
-			fEcho_Section "Cross-compile (skipped: --quick)"
-		else
-			fEcho_Section "Cross-compile (win-amd64, linux-arm64, win-arm64)"
-			GOOS=windows GOARCH=amd64  "${dirPath_Base}/cicd/build.bash"
-			GOOS=linux   GOARCH=arm64  "${dirPath_Base}/cicd/build.bash"
-			GOOS=windows GOARCH=arm64  "${dirPath_Base}/cicd/build.bash"
-			## macOS deferred: needs a Mac for signing/testing (see backlog).
+		## Bump guard: app.Version is authoritative in source; a release tags v<Version>.
+		## If that tag already exists the version wasn't bumped since the last release -
+		## warn (non-fatal) so a merge to main doesn't try to re-cut an existing version.
+		srcVersion="$(grep -oP 'var Version = "\K[^"]+' "${dirPath_Source}/app/app.go" 2>/dev/null || true)"
+		if [[ -n "${srcVersion}" ]] && git rev-parse -q --verify "refs/tags/v${srcVersion}" >/dev/null 2>&1; then
+			fEcho_Clean "WARNING: app.Version ${srcVersion} already tagged (v${srcVersion}) - bump it in source/app/app.go before releasing."
+		fi
+		## The README release badge is dynamic (tracks the release tag). If a hardcoded
+		## version badge is ever added, it must match app.Version - the release enforces
+		## this, warn locally too. (Skips cleanly when neither file/badge is present.)
+		badgeVersion="$(grep -oiP 'badge/[Vv]ersion-\K[0-9]+\.[0-9]+\.[0-9]+' "${dirPath_Base}/README.md" 2>/dev/null | head -1 || true)"
+		if [[ -n "${badgeVersion}" && "${badgeVersion}" != "${srcVersion}" ]]; then
+			fEcho_Clean "WARNING: README version badge ${badgeVersion} != app.Version ${srcVersion}."
+		fi
 
-			## Package the Windows x86_64 zip
-			[[ ! -d "${dirPath_Base}/dist" ]]  &&  mkdir -p "${dirPath_Base}/dist"
-			rm -f "${filePath_Exec_Zip_Win_x86_64}"
-			( cd "${dirPath_Base}/bin"  &&  zip -q9 "../dist/$(basename "${filePath_Exec_Zip_Win_x86_64}")" "${exeName}-windows-amd64.exe" )
-			fEcho_Clean "Packaged ${filePath_Exec_Zip_Win_x86_64}"
+		## Cross-compile + package via goreleaser (the same .goreleaser.yaml the release
+		## uses): binaries for linux/darwin/windows/freebsd (amd64+arm64), .deb/.rpm for
+		## linux, a tar.gz/zip per target, and checksums - all into dist/. --snapshot =
+		## build + package locally, no publish. Then the Windows single-file .exe
+		## installer(s) via NSIS. Skipped under --quick; --no-arm filters the goarch line
+		## to amd64 only. Deferred (need the target OS's own host): macOS .dmg, Windows
+		## .msi, FreeBSD .pkg - those ship as archives for now.
+		if ((doQuick)); then
+			fEcho_Section "Cross-compile + package (skipped: --quick)"
+		else
+			fEcho_Section "Cross-compile + package (goreleaser: binaries, .deb/.rpm, archives, checksums)"
+			local grConfig=".goreleaser.yaml"
+			if ((doNoArm)); then
+				grConfig="${dirPath_Base}/cicd/artifacts/goreleaser-noarm.yaml"
+				mkdir -p "$(dirname "${grConfig}")"
+				sed 's/\[amd64, arm64\]/[amd64]/' "${dirPath_Base}/.goreleaser.yaml" > "${grConfig}"
+				fEcho_Clean "arm64 skipped (--no-arm): amd64-only matrix"
+			fi
+			( cd "${dirPath_Base}"  &&  GOFLAGS=  go run "${NGDB_GORELEASER}" release --snapshot --clean --config "${grConfig}" )
+			fEcho_Clean "Packaged into ${dirPath_Base}/dist/ (binaries, .deb/.rpm, archives, checksums)"
+			## Windows single-file .exe installer(s) from the just-built binaries (NSIS).
+			( cd "${dirPath_Base}"  &&  "${dirPath_Base}/cicd/utility/windows-installer.bash" "${srcVersion:-0.0.0}" )
 		fi
 
 	fi
@@ -244,7 +276,7 @@ fMain(){
 	if ((doQuick)); then
 		fEcho_Clean "staticcheck skipped (--quick)"
 	else
-		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run honnef.co/go/tools/cmd/staticcheck@latest ./... )
+		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run "${NGDB_STATICCHECK}" ./... )
 		fEcho_Clean "staticcheck: clean"
 	fi
 
@@ -286,9 +318,9 @@ fMain(){
 	if ((doQuick)); then
 		fEcho_Clean "Module verified (govulncheck + gosec skipped: --quick)"
 	else
-		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run golang.org/x/vuln/cmd/govulncheck@latest ./... )
+		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run "${NGDB_GOVULNCHECK}" ./... )
 		fEcho_Clean "No known vulnerabilities (govulncheck)"
-		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run github.com/securego/gosec/v2/cmd/gosec@latest \
+		( cd "${dirPath_Source}"  &&  GOFLAGS=  go run "${NGDB_GOSEC}" \
 			-exclude=G101,G104,G124,G202,G203,G204,G301,G302,G304,G306,G703 -quiet ./... )
 		fEcho_Clean "No security findings (gosec)"
 	fi
@@ -311,25 +343,6 @@ fMain(){
 		fi
 	done;:
 
-	## Windows x86_64 (no fresh zip under --quick, so skip rather than install a stale one)
-	if ((doQuick)); then
-		fEcho_Clean "Windows x86_64 install skipped (--quick)"
-	elif [[ ! -f "${filePath_Exec_Zip_Win_x86_64}" ]]; then
-		fEcho "Not found: ${filePath_Exec_Zip_Win_x86_64}"
-	else
-		for nextPath in "${preferredInstallPaths_Win_x8664[@]}"; do
-			if [[ -d "${nextPath}" ]]; then
-				fEcho_Clean "extracting ${filePath_Exec_Zip_Win_x86_64} -> ${nextPath%%/}"
-				if { ! unzip -u -o  "${filePath_Exec_Zip_Win_x86_64}"  -d  "${nextPath%%/}"; }  &&  [[ "${nextPath}" != "${HOME}/"* ]]; then
-					sudo unzip -u -o  "${filePath_Exec_Zip_Win_x86_64}"  -d  "${nextPath%%/}"
-				fi
-				ls  -lA  --color=always  --human-readable  --time-style=+"%Y-%m-%d %H:%M:%S"  "${nextPath%%/}/${exeName}"*
-				fEcho_Clean "Installed (windows x86_64) -> ${nextPath%%/}/"
-				break
-			fi
-		done;:
-	fi
-
 	## Profiler: sample the CPU-hot replay path, render a flamegraph into
 	## cicd/artifacts/profiling, GFS-rotate the old ones, and print the hotspot
 	## summary (flame-report.py, plain mode) into the log. Non-gating artifact -
@@ -342,23 +355,34 @@ fMain(){
 		"${dirPath_Base}/cicd/utility/profile.bash"
 	fi
 
-	## Screenshots: regenerate the README thumbnails from the just-built binary
-	## (--no-build reuses it). Slow (headless capture), so --quick skips it. Note:
-	## the demo db uses fresh UUIDv7 ids each run, so most shots differ byte-wise
-	## every build - a full run will restage them for the publish below.
+	## Screenshots stage disabled - the animated demo gif at the top of the README
+	## covers this, so the static thumbnails aren't worth restaging every build.
+	## Left here (commented) in case per-shot thumbnails are wanted again later.
+	#if ((doQuick)); then
+	#	fEcho_Section "Screenshots (skipped: --quick)"
+	#elif [[ -x "${dirPath_Base}/utility/screenshots.bash" ]]; then
+	#	fEcho_Section "Screenshots"
+	#	"${dirPath_Base}/utility/screenshots.bash" --no-build
+	#	fEcho_Clean "Screenshots regenerated"
+	#fi
+
+	## Demo recording: mp4 + looping gif of the TUI-then-CLI walkthrough. mp4 + the
+	## full gif land in ../private/demo-video/{video,gif} (GFS-rotated, not
+	## committed); the latest gif is copied to assets/demo.gif for the README.
+	## Slow (headless capture + two encodes), so --quick skips it.
 	if ((doQuick)); then
-		fEcho_Section "Screenshots (skipped: --quick)"
-	elif [[ -x "${dirPath_Base}/utility/screenshots.bash" ]]; then
-		fEcho_Section "Screenshots"
-		"${dirPath_Base}/utility/screenshots.bash" --no-build
-		fEcho_Clean "Screenshots regenerated"
+		fEcho_Section "Demo recording (skipped: --quick)"
+	elif [[ -x "${dirPath_Base}/cicd/utility/demo-video/demo-video.py" ]]; then
+		fEcho_Section "Demo recording"
+		python3 "${dirPath_Base}/cicd/utility/demo-video/demo-video.py" --no-build
+		fEcho_Clean "Demo mp4 + gif regenerated"
 	fi
 
-	## Optional local hooks (not in the repo). Any private/hooks/claude/*.bash run
-	## here, before publish, so anything a hook regenerates gets committed in the
-	## same run. No-op when the folder is absent. A hook gets the repo base path as
-	## $1; a failing hook warns but does not abort the run.
-	declare hooksDir="${dirPath_Base}/../private/hooks/claude"
+	## Optional local pre-publish hooks (not committed, kept under ../private). Each
+	## *.bash there runs here before publish so anything a hook regenerates gets
+	## committed in the same run. No-op when the folder is absent. A hook gets the
+	## repo base path as $1; a failing hook warns but does not abort the run.
+	declare hooksDir="${dirPath_Base}/../private/cicd-hooks"
 	if [[ -d "${hooksDir}" ]]; then
 		fEcho_Section "Local hooks"
 		for nextHook in "${hooksDir}"/*.bash; do
@@ -614,6 +638,9 @@ source "${meDir}/utility/include/cpu-limit.bash"
 ## GFS rotation for the run-log artifacts (gfs_rotate)
 source "${meDir}/utility/include/gfs-rotate.bash"
 
+## Pinned linter/scanner versions (NGDB_STATICCHECK/GOVULNCHECK/GOSEC)
+source "${meDir}/utility/include/tool-versions.bash"
+
 ## Invoke main
 fMain  "${@}"
 
@@ -639,3 +666,4 @@ fMain  "${@}"
 ##		- 20260704 JC: Added --quick (skip cross-builds and govulncheck).
 ##		- 20260704 JC: --quick also skips screenshots; screenshots.bash moved to github/utility/; run screenshots as a stage before publish; always leave a trailing blank line.
 ##		- 20260704 JC: Preflight now captures the commit message up front (Ctrl+C aborts) instead of a y/n gate; section headers get the letterbox rule; passes --no-prompt to the publish step so it doesn't re-ask.
+##		- 20260711 JC: Full cross-platform packaging via goreleaser (binaries for linux/darwin/windows/freebsd amd64+arm64, .deb/.rpm, archives, checksums) plus a Windows .exe installer; split native debug (test/profile) from release (dogfood/package) builds; added --no-arm.

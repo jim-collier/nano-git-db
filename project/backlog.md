@@ -54,90 +54,87 @@ In each section, items are listed approximately from newest to oldest.
 
 ### New features and enhancements
 
-- ✅ Donations model:
-	- ✅ "Support nano-git-db" button in Help|About (or `--donate`), showing the URL it opens. The `donate` package holds one blurb + one link (DONATE.md); CLI prints the blurb and URL line-spaced, TUI shows a dialog, web shows a Support page. Open-source-only (enterprise turns `donate.Enabled` off).
-	- ✅ `## Support nano-git-db` section in README.md - adapted from SilkTerm's (name + socials fit a git/database tool).
-	- ✅ `DONATE.md` - adapted from SilkTerm's.
-	- ✅ `.github/FUNDING.yml` - added (custom link to DONATE.md live; platform handles commented, see FYI).
-	- ✅ Locked with `.github/CODEOWNERS`:
-		- ✅ Isolated Help|About dialog TUI, web UI, CLI code file (each front-end's donate.go + the `donate` package + donate.html, all listed in CODEOWNERS).
-		- ✅ /.github/CODEOWNERS  @jim-collier
-		- ✅ /DONATE.md  @jim-collier
-		- ✅ /.github/FUNDING.yml  @jim-collier
-	- ✅ Remove ssh signing keys model (for now) - dropped the signed-address-table code (canonical bytes, signer script, ops doc, test gate); the deferred idea is kept under Defer below.
-	- FYI to-do (owner):
-		- Enable a GitHub Sponsors profile for the Sponsor badge/link to go live (else it 404s)
-		- fill in `.github/FUNDING.yml` handles.
-
-- 🛠️ Enterprise license validation scheme. Commonly used, phones home to verify active, allows N copies simultaneously. But doesn't fail if can't phone home for some time. Doesn't bind to specific hardware or anything.
-	- Scheme decided in the enterprise repo (`research-license-validation.md`); implementation is a later phase.
-
-- ✅ Web UI: basic login. The web server has no authentication today. Localhost binding is the only gate, and every request acts as one default user, so it cannot be safely exposed.
-	- Done: an explicit `web_mode` setting (default `local`) picks the shape. `local` identifies the single user with no password - the git repo account, else the OS user - and refuses to serve if a proxy header ever appears, so an accidentally exposed box never runs passwordless. `proxied` requires a login: a session cookie, checked against a local creds file of PBKDF2-hashed passwords (stdlib `crypto/pbkdf2`, no new dependency) kept outside the synced tree; the signed-in user drives the data layer so the existing user/group permissions apply. Add a login with the `webuser` verb. Stronger methods stay an enterprise concern.
-	- On a local machine, identify the user with no password. Use the git repository account name, or the operating system user when there is no repository.
-	- Behind a reverse proxy, require a username and password. The stronger methods belong to the enterprise edition.
-	- The signed-in user must reach the data layer, so the existing user and group permissions apply to the web view.
-	- Settle first how to tell a local machine apart from a proxied one, since a proxy also connects from localhost. Prefer an explicit setting over guessing.
-		- Decided (owner, 2026-07-04): explicit mode setting plus a header safety-net. A setting (e.g. `web_mode: local|proxied`, default `local`) is authoritative: `local` = auto-identify, no password; `proxied` = require username + password. Safety-net: if the setting is left at `local` but an incoming request carries a forwarded-for / proxy header, refuse to serve (or force login) so an accidental exposure can never run passwordless. Local identity resolves to the git repo account, else the OS user (reuse the existing default-user resolution). Still to design at build time: where proxied credentials live (a local credentials file outside the git-synced tree, bcrypt-hashed, is the likely answer since syncing password hashes via git is undesirable).
-
-- 🛠️ Optional ability to store data encrypted in transaction log. (But always decrypted in user's local SQLite.)
-	- Done (phase 1, field-value encryption): new `internal/core/crypt` uses AES-256-GCM under a per-value subkey derived from the entry's unique tx_id, so nonce reuse can't happen at any record count. Only field values encrypt; every other column stays clear, since git merge and replay need them. Encryption happens on the write path and decryption just before replay; an undecryptable value binds NULL so ciphertext never reaches the view. All four front-ends inherit it. Verified end to end: sensitive data never appears in the synced log, replay with the key restores it, and without the key it shows empty and warns. Full design is in design.md.
-	- Reason: So that the data (in txlog) is not readable by the git hosting company, or anyone that gets ahold of it via git.
-	- Gotcha: To still work as a txlog that git can sync and reconcile, some data will need to be stored in the clear - probably everything except for the actual field data values.
-		- So some data will necessarily be leaky, except for the actual data values.
-	- ✅ The encryption key will need to be stored outside the repo. (E.g. a random binary -> base64 key stored in a text file, e.g. in the same place the user would store their own custom named queries.)
-	- ✅ The application should have CLI `--init` and `--encrypt=on` flags, that can set this up automatically. Flags can specify both git location, and db name. The machine-visible and user locations can be auto-computed from there, or overridden with additional flags.
-		- ✅ Keys are per-db. Not per-user or per-machine. (But each user must get ahold of the key outside of git methods. E.g. Discord chat or something.)
-		- ✅ Encryption can be turned on and off at will, per-host. Some data fields in the txlog will be stored in the clear, some encrypted. The app should be able to tell which is which (via a mechanism that doesn't add much weight to the txlog), and act accordingly.
-			- But by default, if a user has the key file in their user directory for the db in question, fields should be encrypted - unless the user specifically turns encryption off for themselves, for that particular database (persistently).  ## Done: local pref lives in the registry record (unsynced); 'auto' = encrypt-if-key-present.
-	- ✅ If the txlog contains encrypted data, but the user either has no key file, for now, warn them with an instruction to obtain it somehow.
-		- But for now, allow them to proceed, able to read and write unencrypted data only. In the future this may be optionally more locked-down by an owner or admin. (In the latter case it might be truly enforceable only if running as a web server.)
-	- ✅ If the txlog contains encrypted data, and the user has they key file but explicitly disabled encryption for themselves for the db in question, warn them so at least they are aware.
-		- Same caveat about allowing them to continue, while in the future possibly offering a way to enforce encryption-only.
-	- 🛠️ Additional hierarchical DDL keys:
-		- ✅ `encryption: always|never|auto`  ## Default 'auto', meaning only if initialized with `--encrypt=on`, or enabled later per-user config.  ## Done at database/table/field; outermost always|never locks lower levels; all-auto defers to local pref.
-			- 'always' means that encryption is enabled at that level, and can't be overridden lower in the hierarchy (only higher).
-				- If an encryption key file is not available, writing data is prohibited, for whatever fields are affected. (And only unencrypted data can be read.)
-			- 'never' means that encryption is disabled at that level, and can't be overridden lower in the hierarchy (only higher).
-			- 'auto' means whatever the db was initialized with, or user decides. Can be overridden higher OR lower in the heirarchy.
-			- Use-cases:
-				- Certain field must ALWAYS be encrypted (e.g. SSN.)
-				- Certain fields must NEVER be encrypted (maybe some field used by a txlog preprocessor or something).
-				- All fields of a certain table must ALWAYS be encrypted.
-		- 🛠️ Levels this label can be applied: "database:", "table:", "field:", "ddl:" (which refers to whole self as a file), "named_queries:", "config:". Basically at any level that ultimately contains fields, and/or whole text files other than the whole txlog itself. (Even though actual encryption happens at the field-level only - this is just different ways to define what fields are or are not encrypted.  ## database/table/field DONE; ddl/named_queries/config (file-level) deferred with file encryption below.
-	- 🔘 If the entire database is set with encryption on, then by default the DDL, code file[s], and named queries file in git, are encrypted too. Will need CLI flags to locally decrypt and re-encrypt them, so that they can be edited. (This would also have the benefit of protecting such files from accidental modification.)  ## Deferred (phase 2): file-level encryption of the DDL/.queries/.lua.
-	- 🔘 Future enhancements:
-		- 🔘 Ability to use multiple keys - e.g. by externally-managed responsibility level, team, etc.
-		- 🔘 Ability to use public/private keys in addition to standard symmetric - e.g. able to read the configuration and DDL (and even some fields) with the public key, but cryptographically unable to reencrypt them without the private key (thus making them fundamentally read-only for certain externally-managed roles - in an enforceable way even for this distributed system, that doesn't rely on the data being locked away on a central web server).
-		- 🔘 Think of a way that public keys could be securely distributed *in-application* (necessarily being synced by git). E.g., public key(s) and possibly even private keys, are encrypted with the main symmetric key, stored somehow in the main git-synced folder.
-		- 🔘 Allow local symmetric keys to be generated with a passphrase.
-		- 🔘 Allow re-encrypting existing data with a new key. (Perhaps key management could be done the way LUKS does it - with manageable keys that simply unlock a fixed bigger key. Would have to carefully think through how to accomplish such a thing, with such a distributed architecture.)
+- 🛠️ Optional encrypted data in the transaction log. The local SQLite copy is always decrypted.
+	- Reason: keep the log unreadable to the git host, or to anyone who gets the repo.
+	- Note: some columns stay clear so git can still merge and replay (table and field names, row id, user, host, counts). Only the field values are private.
+	- Done: phase one encrypts field values. A field with no key reads back empty and warns, so ciphertext never reaches the view. Full design is in design.md.
+	- ✅ Key lives outside the repo, one per database. Users share it out of band.
+	- ✅ `--init --encrypt=on` sets up the key and turns encryption on. It can be toggled per host afterward.
+	- ✅ With encrypted data present but no key, the user is warned and can still read and write the clear fields.
+	- ✅ DDL `encryption: always|never|auto` at the database, table, and field level. `always` and `never` lock the levels below; `auto` defers to the local preference.
+	- 🔘 Deferred (phase two): also encrypt the DDL, query, and script sidecar files, with flags to decrypt and re-encrypt them for editing.
+	- 🔘 Future: multiple keys by role or team; public and private keys for read-only roles; passphrase-generated keys; re-encrypting existing data with a new key.
 
 ### Done
 
 #### First steps
 
 - ✅ Repo scaffold: `go.mod`, package skeleton, arg-dispatch `main`, size-optimized build script, `.gitignore`. Compiles, vets, and gofmt-clean; all four front-ends stubbed and the web server serves its embedded asset.
+
 - ✅ DDL parser: `example.ddl` parses into an in-memory schema model through three layers (indent tree, type-directed values, semantic map). Tested, wired to `nanogitdb ddl <file>`.
+
 - ✅ SQLite view: builds and migrates the local `.sqlite` from the schema using pure-Go `modernc.org/sqlite`, with system columns and uniques/indexes, idempotent. Tested, wired to `nanogitdb build`. On-the-fly migration of existing data is a separate item below.
+
 - ✅ Transaction log: CSV read/write plus apply log to the SQLite view, with the log as source of truth. Append-only, field-granular replay (create/update/mark_delete/delete) in one tx. Tested, wired to `nanogitdb replay`. Added `row_id` to the entry (see design).
+
 - ✅ Core CRUD API: the single internal API every front-end and Lua calls, covering Create/Update/SetField/MarkDelete/Delete/Get/Query. Writes are log-first (append to truth, then apply to view), and it owns id, timestamp, and user stamping. Tested including a full rebuild from log. Validation, access, and triggers are separate items.
+
 - ✅ CLI front-end: full arg-based CRUD over the core, with verbs create/get/update/setnull/markdelete/delete/query each taking the same `<ddl> <sqlite> <logdir>` triple as replay and sync. Stateless and script-friendly until the config file lands. Writes stamp NANOGITDB_USER or the OS username, and `setnull` is its own verb so a literal "NULL" string stays expressible. Schema-op flags are their own backlog item.
+
 - ✅ Git sync: pull/merge/commit/push of the tx-log dir with a background loop, shelling out to `git`. Append conflicts auto-resolve via `merge=union`, and replay sorts by (date, tx_id) so clients converge. Tested including two-client convergence, wired to `nanogitdb sync`.
+
 - ✅ Lua host: `gopher-lua` bound to the same core CRUD as `db.{create,get,update,setfield,markdelete,delete,query}`, sandboxed to base/table/string/math/coroutine only with no os/io. Tested, wired to `nanogitdb --script`.
 	- Note: now an enterprise-edition feature. The host moved behind the script seam, so the open-source build has no scripting host and drops the gopher-lua dependency.
+
 - ✅ Auto tables: users, groups, and the opt-in feature tables (m:m, comments, audit, access, attachments), defined in the same DDL users write and embedded in one source file. Built idempotently at startup, with default groups (owners/admins/users/guests) seeded log-first so they replicate. audit_trail opts out of the universal system columns via the new `system_fields: no` key, and access_rows only appears when a table opts in to row_level_access. First-user membership in owners/admins is deferred until user rows exist.
+
 - ✅ TUI front-end: `tview`/`tcell`, both pure Go with the cross-compile intact. Table list (user tables first, then built-ins), a rows grid that stays empty until a table is opened, a create/edit form that writes only changed fields, and soft/hard delete behind a confirm modal, all through the shared CRUD API. Tested headlessly on tcell's simulation screen, including a full boot-open-quit pass. `nanogitdb --tui <ddl> <sqlite> <logdir>`.
+
 - ✅ Web UI: stdlib `net/http` + `html/template` + `embed` with vendored, pinned htmx (2.0.4). Table sidebar, a rows grid that renders nothing until a table is asked for, a create/edit form writing only changed fields, and soft/hard delete behind hx-confirm; the 127.0.0.1-only binding is the access control. Front-end bring-up and table metadata live in shared `schema.OpenClient`/`schema.Catalog`, so the four front-ends can't drift. `nanogitdb --serve <ddl> <sqlite> <logdir>`.
+
 - ✅ CI/CD: a manual pipeline in `cicd/cicd.bash` that builds native (size-reported), cross-compiles windows-amd64/linux-arm64/windows-arm64 (pure Go, no extra toolchains; macOS stays deferred), zips windows into `dist/`, runs test.bash (vet, gofmt, tests, smoke), verifies the module and runs govulncheck, then dogfoods and publishes. Profiling beyond the size report waits until there's something worth profiling.
 	- ✅ `-q/--quiet` (unattended, no prompt, flows to the publish step) and `-m/--message/--msg` (`-m MSG` or `-m=MSG`; auto-generated when `-q` and no `-m`), in both cicd.bash and the n8git publish helper. Stage output uses the existing `fEcho`/`fEcho_Clean` helpers (bracketed section headers, blank-line grouping).
 	- ✅ `--quick`: skip the slow stages (cross-builds + Windows packaging/install, fuzz, profiler, screenshots, govulncheck, gosec); native build, lint, quick tests, go mod verify, dogfood, and publish still run.
 	- ✅ Pipeline hardening: lint+format stage (`gofmt -w` + `staticcheck`), auto-discovered fuzz targets (`fuzz.bash` over the DDL/txlog/config parsers, seeds also run in the normal suite), `gosec` beside govulncheck (documented exclude list), and a non-gating profiler stage - samples the tx-log replay hot path into an inferno flamegraph (`cicd/artifacts/profiling/`, GFS-rotated) with a `flame-report.py` hotspot summary. Run log tee'd to `cicd/artifacts/lint/` for after-the-fact review (`lint-report.bash`).
+	- ✅ Full cross-platform packaging (non-`--quick`): goreleaser cross-builds linux/macOS/windows/freebsd for amd64+arm64 (all pure Go, one Linux box, no C toolchain), then packages `.deb`/`.rpm` for linux, a `.tar.gz`/`.zip` per target, and checksums. A single self-contained Windows `.exe` installer per arch is built with NSIS (`windows-installer.bash`/`.nsi`) - installs, adds to PATH, upgrades an existing install. Builds split: a native debug binary drives testing/profiling, an optimized release binary is what gets packaged and dogfooded. `--no-arm` trims a run to amd64 only (arm is cheap here, so it's opt-out not opt-in). Deferred (each needs the target OS's own tooling/signing host): macOS `.dmg`, Windows `.msi`, FreeBSD `.pkg` (ship as archives); AppImage + Flatpak.
+
 - ✅ Supply-chain hardening: vendored deps, `go mod verify`, `-mod=vendor`, and `govulncheck`, all wired into the pipeline. The first govulncheck run found five reachable Go-stdlib vulns; pinning `toolchain go1.26.4` cleared them and it now scans clean.
 
 #### Done - Bugs
 
 #### Done - New features and enhancements
+
+- ✅ Enterprise license validation. Phones home to confirm an active subscription and allows a set number of copies at once. Does not fail if it cannot reach the server for a while, and does not bind to specific hardware.
+	- Note: scheme decided in the enterprise repo; implementation is a later phase.
+
+- ✅ Address a database by name on the CLI and in the UIs, not by its file paths.
+	- Done: every CRUD verb now names a registered database (`ngdb create issues task ...`) and looks up its ddl/sqlite/log from the registry; the old three-path form is gone for data verbs. The name is the first positional, or `--db`/`--table` flags (both accepted, in any order), and resolves with or without a file extension.
+	- Done: `build`/`replay`/`sync`/`gc` and the rename verbs take a name too, keeping an explicit-path form for pre-registration use; `--tui <db>` and `--serve <db>` open a registered database directly.
+	- Done: demo recorder, `demos/` walkthrough + `seed.bash`, README, and syntax.md all switched to the name-based form; the recorder's TUI beat lands on a standard dark theme instead of high-contrast.
+
+- ✅ Animated README demo (faux terminal, in cicd, skippable with `--quick`).
+	- Done: `cicd/utility/demo-video/demo-video.py` drives a real ngdb (TUI first, then the same data from the CLI) inside a decorated xterm on a private Xvfb, typing at a realistic pace with the odd fixed typo. It renders a 1920x1080 mp4 and a looping 960x540 gif with a fade-to-black loop seam.
+	- Done: the mp4 and full gif go to `../private/demo-video/{video,gif}` and GFS-rotate; the latest gif is copied to `assets/demo.gif` for the README. All content is anonymous (fake user/host, /tmp paths).
+	- Note: adapted from the sister silkterm recorder, minus its GPU and audio work; deps are python3 stdlib + ffmpeg + xterm/xdotool/Xvfb/xfwm4. A web-UI leg can be added later.
+
+- ✅ CI/CD improvements (all three repos).
+	- Done: a small hosted `ci.yml` per repo runs vet, gofmt, test, and build on push and pull request, with Go pinned. The full pipeline stays local.
+	- Done: a `dev` integration branch. Features merge to `dev`, and a `dev` -> `main` merge cuts a release. The version is authoritative in a source var, and the release skips if it was not bumped.
+	- Done: goreleaser builds, archives, and checksums the release for the floss and vendor repos. The local cross-compile uses the same config.
+	- Done: linter and tool versions pinned in one place. A dependabot config brings dependency and toolchain bumps as grouped pull requests.
+	- Done: README badges for CI status, latest release, and Go version.
+	- Note: the first live release fires on the next `dev` -> `main` merge (cuts v1.0.0-alpha.1).
+
+- ✅ Donations model.
+	- Done: a "Support nano-git-db" entry in Help/About and `--donate` shows one blurb and one link (DONATE.md). The CLI prints it, the TUI shows a dialog, and the web UI shows a Support page. Open-source build only.
+	- Done: a Support section in README.md, a DONATE.md, and a `.github/FUNDING.yml`.
+	- Done: the donate files and package are locked to the maintainer via `.github/CODEOWNERS`.
+	- Note: to finish going live, enable a GitHub Sponsors profile and fill in the FUNDING.yml handles.
+
+- ✅ Web UI basic login.
+	- Done: an explicit `web_mode` setting (default `local`) picks the shape. `local` identifies the single user with no password (the git repo account, else the OS user) and refuses to serve if a proxy header appears, so an exposed box never runs passwordless. `proxied` requires a login: a session cookie checked against a local file of PBKDF2-hashed passwords, kept outside the synced tree. Add a user with the `webuser` verb.
+	- Done: the signed-in user drives the data layer, so the existing user and group permissions apply to the web view.
+	- Note: stronger sign-in methods stay an enterprise concern.
 
 - ✅ Exe name should be 'ngdb'.
 	- Done: the built binary and all user-facing references (CLI/TUI/web usage, version line, web title) are now `ngdb`; `cmd/nanogitdb` renamed to `cmd/ngdb`. The module path `nano-git-db` and the `NANOGITDB_USER`/`NANOGITDB_HOST` env vars are unchanged.

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/jim-collier/nano-git-db/internal/core/ddl"
 )
@@ -84,6 +85,32 @@ func validate(dir, fallbackName string, system bool) Listed {
 		return listed
 	}
 	return listed
+}
+
+// FindByName returns the registered database whose name matches, or nil. The
+// match is exact and case-sensitive (a name is a directory on disk); if that
+// misses and the query carries a file extension (e.g. "issues.ddl"), the base
+// name is tried too, so a user can name the database with or without an
+// extension. This is how the front-ends refer to a database by a single name
+// instead of spelling out its ddl/sqlite/log paths.
+func FindByName(name string) *DBConfig {
+	if name == "" {
+		return nil
+	}
+	listed := List()
+	for _, entry := range listed {
+		if entry.Config != nil && entry.Config.Name == name {
+			return entry.Config
+		}
+	}
+	if base := strings.TrimSuffix(name, filepath.Ext(name)); base != name {
+		for _, entry := range listed {
+			if entry.Config != nil && entry.Config.Name == base {
+				return entry.Config
+			}
+		}
+	}
+	return nil
 }
 
 // FindByDDL returns the registered record whose ddl_path matches ddlPath (by

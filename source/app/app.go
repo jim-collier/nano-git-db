@@ -19,9 +19,13 @@ import (
 	"github.com/jim-collier/nano-git-db/internal/web"
 )
 
-// Version is stamped at build time via -ldflags -X (see cicd/build.bash); it
-// stays "dev" for a plain `go build`.
-var Version = "dev"
+// Version is the authoritative release version, bumped here in source before
+// cutting a release (the release tag and goreleaser both derive from it).
+var Version = "1.0.0-alpha.1"
+
+// Build is extra provenance (short commit + dirty flag) stamped by cicd/build.bash
+// via -ldflags -X; empty for a plain `go build`, so a release binary reads clean.
+var Build = ""
 
 // Run dispatches the given args (os.Args[1:]) to a front-end and returns its
 // error, if any.
@@ -29,7 +33,11 @@ func Run(args []string) error {
 	// --version: print the build version and stop. A concise line the CI/CD
 	// pipeline can run to confirm the binary executes, without opening the TUI.
 	if len(args) > 0 && (args[0] == "--version" || args[0] == "-v") {
-		fmt.Println("ngdb " + Version)
+		line := "ngdb " + Version
+		if Build != "" {
+			line += " (" + Build + ")"
+		}
+		fmt.Println(line)
 		return nil
 	}
 	// --config[=path]: a global prefix that redirects the database registry;

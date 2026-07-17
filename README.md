@@ -5,11 +5,12 @@
 <!-- markdownlint-disable MD041 -- First line in a file should be a top-level heading -->
 <div align="center">
 
-![Go](https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=white)
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-![Lifecycle: Beta](https://img.shields.io/badge/Lifecycle-Beta-yellow)
+![Go](https://img.shields.io/github/go-mod/go-version/jim-collier/nano-git-db?filename=source/go.mod&logo=go&logoColor=white)
+[![CI](https://github.com/jim-collier/nano-git-db/actions/workflows/ci.yml/badge.svg)](https://github.com/jim-collier/nano-git-db/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/jim-collier/nano-git-db)](https://github.com/jim-collier/nano-git-db/releases/latest)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](license.md)
+![Lifecycle: Alpha](https://img.shields.io/badge/Lifecycle-Alpha-orange)
 ![Support](https://img.shields.io/badge/Support-Maintained-brightgreen)
-![Status: Passing](https://img.shields.io/badge/Status-Passing-brightgreen)
 
 </div>
 <!--
@@ -43,29 +44,30 @@
 <!-- TOC ignore:true -->
 # Nano Git DB
 
-<table style="border: none; border-collapse: collapse;">
-	<tr style="border: none; border-collapse: collapse;">
-		<td style="border: none; border-collapse: collapse;"><img src="assets/logo.png" alt="NGDB" width="320"/></td>
-		<td style="border: none;">Nano Git DB is a tiny, simple, yet powerful distributed multi-user database.<br /><br />A separately licensed enterprise edition adds encrypted data, so the git host cannot read it, plus Lua scripting for triggers and automation.<br /><br />The database schema uses an easy, user-friendly text-based DDL; no SQL knowledge necessary. A single small executable contains the CLI, TUI, and web interfaces (use any or all).<br /><br />The database schema can be modified at will, while all data remains backward and forward compatible.<br /><br />Any number of databases can be run concurrently on a machine. Git is used for the "distributed" feature. (And Nano Git DB is perfect for a more robust team issue tracking database for each git repo - and just such a schema is included as a useful example.)<br /><br />But git is not required for local-only use, nor for server-hosted web browser access.<br /><br />Runs on Linux, Windows, macOS.</td>
-	</tr style="border: none; border-collapse: collapse;">
-</table>
+<div align="center">
 
-<!--
-	<p align="center"><img src="assets/logo.png" alt="" width="128"></p>
-	This is a thing.
--->
+<img src="assets/logo.png" alt="Nano Git DB" width="140"/>
 
+**A multi-user database you sync with `git`. The source of truth is a folder of append-only text - no SQL, no database server, one static binary.**
+
+<img src="assets/demo.gif" width="90%" alt="Browsing a tree-grid board and editing a record in the terminal UI, then querying and adding the same data from the CLI - where the whole database is just a folder of append-only text."/>
+
+<sub>The terminal UI, then the same database from the shell.</sub>
+
+</div>
+
+nano-git-db is a small database for one person or a whole team. You define it in a text file and use it from the command line, a terminal UI, or a web browser. Sync it with your team over `git`, or don't - it works fine on its own.
 
 <!-- TOC ignore:true -->
 ## Table of contents
 
 <!-- TOC -->
 
-- [Why](#why)
+- [Why another database?](#why-another-database)
 - [Features](#features)
 - [Enterprise edition](#enterprise-edition)
-- [The very few files involved](#the-very-few-files-involved)
-- [Example use-cases](#example-use-cases)
+- [What a database is, on disk](#what-a-database-is-on-disk)
+- [Example use cases](#example-use-cases)
 - [Installing](#installing)
 - [Building from source](#building-from-source)
 - [Quick start](#quick-start)
@@ -78,131 +80,63 @@
 
 <!-- /TOC -->
 
-## Why
+## Why another database?
 
-Why indeed, when:
+Plenty of tools each do one of these. Few do all of them at once:
 
-- There are a possibly hundreds "tiny databases" out there.
-- There are maybe dozens of databases that can work across a team or teams, via git.
-- There are countless databases that can be defined and managed without SQL, including those that opt for a user-friendly text-based DDL.
-- There are uncountable databases that run as a single, small, cross-platform executable. (Plus the database file.)
+- Tiny and local, one small binary.
+- Multi-user and synced across a team - here, over `git`, with conflicts auto-merged.
+- Defined without SQL, in a friendly text schema you edit by hand.
+- Stored as human-readable text you can diff, grep, review, and back up like any other file.
 
-But: None embody all of those at the same time.
+nano-git-db is all four.
 
 ## Features
 
-- Can sync records across multiple users, and auto-resolve conflicts, via `git`.
-
-- Any number of databases are supported (all at the same with multiple running tiny instances).
-
-- Git is not required - it can also work independently as a single-user database. (And even as a server via built-in web server.)
-
-- One small executable contains:
-
-	- A full CRUD command-line interface
-	- A full CRUD TUI interface
-	- A full CRUD self-hosting local web UI. (That can be used locally, and/or shared to the network.)
-
-- SQLite3 is used as the back-end. (The `.sqlite` file is not synced via git though, it is stored outside the repo.)
-
-- A text file is used separately, as a transaction log for git syncing/auto-merging. The executable regularly checks it for updates, and exports local updates to it as they happen. Changes to the file are imported to the local `.sqlite` database, that all the interfaces use.
-
-- The database is created - and can be continuously managed - via a text file with a simple DDL language, in YAML format.
-
-- The schema can change at any time. Old and new records stay compatible in both directions, so you never have to migrate.
-
-- Tables and fields can be renamed without losing or rewriting existing history.
-
-- Views arrange your data on screen, including nested and hierarchical lists such as a task tree or an outline.
-
-- Saved queries live next to the schema and can be picked from a menu.
-
-- Any table can opt in to extras: a comment list per record, an automatic audit trail of every change, and file or link attachments.
-
-- Users and groups with permissions down to the table, field, and row level.
-
-- Old deleted records are cleaned out of the log automatically, so it does not grow forever.
-
-- Register your databases once and pick from a list at startup.
-
-- One small static binary with no external dependencies. Runs on Linux, Windows, and macOS.
+- Syncs records across people and auto-merges their changes with `git`.
+- Git is optional. On its own it's a fast local single-user database, or a self-hosted web app.
+- One small static binary, no external dependencies - three front-ends over one shared core:
+	- a full CRUD command line,
+	- a terminal UI that works fine over SSH, with built-in light and dark themes,
+	- a self-hosted web UI, local-only or shared to your network with password sign-in.
+- Schema defined in a plain text file - a friendly YAML-style DDL, no SQL to write.
+- Change the schema anytime. Old and new records stay compatible both ways, so there's never a migration.
+- Rename tables and fields without losing or rewriting history.
+- Views, including hierarchical tree grids - a task tree, an outline, a threaded board.
+- Saved queries kept next to the schema and picked from a menu.
+- Per-table extras, opt-in: a comment thread per record, an automatic audit trail of every change, and file or link attachments.
+- Users and groups, with permissions down to the table, field, and row.
+- Old deleted records are cleaned out of the log automatically, so it doesn't grow forever.
+- Register a database once, then refer to it by name and pick from a list at startup.
+- SQLite under the hood as a rebuildable local view - the `.sqlite` file stays out of the repo; only the text log is synced.
+- Runs on Linux and Windows. macOS builds from source (no prebuilt binary yet).
 
 ## Enterprise edition
 
-nano-git-db is open source and complete on its own. A separately licensed enterprise edition adds features that some teams need, built into the same single binary.
+nano-git-db is open source and complete on its own. A separately licensed enterprise edition adds features some teams need, built into the same single binary.
 
-- At-rest encryption of field values in the synced log. The git host cannot read your data, while your local database stays fully queryable. Each database has its own key, kept out of the repo, with a simple per-field, per-table, or per-database policy set by an `encryption: always|never|auto` DDL key.
-
-- Lua scripting. Run a script against the database with `--script`, and attach triggers and stored procedures to tables and fields through the DDL's code: keys. Scripts reach the data only through the same safe database calls the rest of the program uses.
-
+- At-rest encryption of field values in the synced log. The git host can't read your data, while your local database stays fully queryable. Each database has its own key, kept out of the repo, with a per-field, per-table, or per-database policy set by an `encryption: always|never|auto` DDL key.
+- Lua scripting. Run a script against the database with `--script`, or attach triggers and stored procedures to tables and fields through the DDL's `code:` keys. Scripts reach the data only through the same safe calls the rest of the program uses.
+- Planned: an authenticator app, passkeys, and optional Google, Microsoft, or LinkedIn sign-in for the web UI. (Basic password sign-in already ships in the open-source build.)
 - Planned: a REST API for network access.
-
-- Planned: sign-in for the shared web UI, with passwords, an authenticator app, passkeys, and optional Google, Microsoft, or LinkedIn login.
 
 The open-source build can share and sync an encrypted database, but only the enterprise build can read and write the encrypted fields.
 
-## Screenshots
+## What a database is, on disk
 
-The terminal UI, shown with an example team issue tracker. Click any image for the full-size version.
+A database is just a few files. You register it once with `ngdb --init`, then refer to it by name - ngdb keeps track of the paths.
 
-<p align="center">
-	<a href="assets/screenshots/large/1-picker.png"><img src="assets/screenshots/1-picker.png" width="32%" alt="Startup picker: choose from your registered databases"/></a>
-	<a href="assets/screenshots/large/2-view.png"><img src="assets/screenshots/2-view.png" width="32%" alt="A view: hierarchical tasks in a tree grid"/></a>
-	<a href="assets/screenshots/large/3-table.png"><img src="assets/screenshots/3-table.png" width="32%" alt="Table rows beside the list of views and tables"/></a>
-	<a href="assets/screenshots/large/4-form.png"><img src="assets/screenshots/4-form.png" width="32%" alt="Editing a record; saving writes only the changed fields"/></a>
-	<a href="assets/screenshots/large/5-theme.png"><img src="assets/screenshots/5-theme.png" width="32%" alt="Theme picker with six built-in light and dark themes"/></a>
-</p>
+- `schema.ddl` - your schema. Keep it with your project, inside the git repo if you want syncing. Edit it anytime; the local database migrates itself.
+- `txlog.csv` - the append-only transaction log (a folder of segments). The source of truth, synced and auto-merged by git. For sharing, this *is* the database.
+- `<name>.queries` - optional saved queries, next to the schema.
+- `db.sqlite` - the local, rebuildable view of the log. Derived, never synced, kept outside the repo (defaults under `~/.local/share/ngdb/`).
+- `config.toml` - ngdb's own registry record for the database, in your OS config dir. Written by `--init`; you won't normally touch it.
+- `ngdb` - the one binary, anywhere on your `PATH`.
 
-## The (very few) files involved
+## Example use cases
 
-These files can go anywhere, this is just the suggested/default location. (This describes the target layout; pre-1.0, paths are passed explicitly on the command line.)
-
-Required and/or auto-generated:
-
-- `/usr/local/bin/ngdb`
-	- The one and only executable.
-
-- `./repo/ngdb/the-instance-name/txlog.csv`
-	- The transaction log - the source of truth, updated by all clients, synced and auto-reconciled by git (if using git).
-	- Doesn't have to be in this location, just somewhere in a git repo if you want syncing.
-	- The program periodically syncs this, so that you're working with fresh data.
-
-- `./repo/ngdb/the-instance-name/schema.ddl`
-	- Your database schema definition file.
-	- It gracefully accepts local or synced additions and changes to the DDL: new fields/tables are migrated into the local database live, and previous transactions are not affected.
-
-- `./repo/ngdb/the-instance-name/config.toml`
-	- Repo-specific settings. (Planned - see the tunable-options backlog item.)
-
-- `~/.local/share/ngdb/the-instance-name/db.sqlite`
-	- The local database - a derived, rebuildable view of the transaction log. Changes come from and go to the log every time it syncs, but you're working with this database.
-
-<!--
-| File | Description
-| :--  | :--
-| `./repo/ngdb/the-instance-name/shared-transactions.log`              | The main record that gets updated by all clients, and synced and auto-reconciled by git (if using git).
-| `./repo/ngdb/the-instance-name/schema.ddl`                           | The table definition file. Upon program startup, it gracefully accepts additions, deletions, and changes to the DDL. Previous transactions are not affected.
-| `./repo/ngdb/the-instance-name/config.toml`                          | Repo-specific settings.
-| `~/.local/share/ngdb/the-instance-name/db.sqlite`          | The local database.
--->
-
-Optional (planned - see the predefined-queries backlog item):
-
-- `./repo/the-instance-name/named-queries.txt`
-	- Synced predefined named queries, available to everyone.
-
-- `/etc/ngdb/the-instance-name/named-queries.txt`
-	- Predefined named queries, available only to the local machine.
-
-- `~/.local/share/ngdb/the-instance-name/named-queries.txt`
-	- Predefined named queries, available only to the local user.
-
-## Example use-cases
-
-- A project lead can create a small issue tracking database to share with the the entire team, via the shared git repo. (With separate databases per repo.)
-	- Issue management can be automated via command-line API, and/or managed by each user with the TUI (even over SSH), a central web UI, or a per-user local-only web UI.
-
-- Github projects can have more robust issue tracking (or any number of arbitrary databases), that repo users only have to install a single small executable to participate with.
+- A team issue tracker, one per git repo, shared through the same repo the code lives in. Automate it from the command line, or let each person use the TUI (even over SSH), a shared web UI, or their own local-only web UI. A ready-to-run issue-tracker schema is included in [`demos/`](demos/).
+- Any small shared database a GitHub project wants its contributors to keep - they install one small binary to take part, and it rides along in the repo.
 
 ## Installing
 
@@ -214,7 +148,7 @@ Grab a release binary (once releases start), or build from source. It's one stat
 
 ## Quick start
 
-You define the database in a plain-text schema file (the DDL). No SQL, no migrations - you edit the file, and the local database migrates itself. Three files matter: your `schema.ddl`, a tx-log directory (the shared source of truth, git-syncable), and a local `.sqlite` (a rebuildable view - never synced). The examples below pass all three explicitly; once a database is registered, the TUI can just show you a picker (see [Startup discovery](syntax.md#startup-discovery-and-the-database-registry)).
+You define the database in a plain-text schema file (the DDL). No SQL, no migrations - you edit the file, and the local database migrates itself. Under the hood three things matter: your `schema.ddl`, a tx-log directory (the shared source of truth, git-syncable), and a local `.sqlite` (a rebuildable view - never synced). You register those once and then just refer to the database by name; ngdb keeps track of the paths (see [Startup discovery](syntax.md#startup-discovery-and-the-database-registry)).
 
 ### A minimal schema
 
@@ -272,29 +206,29 @@ ui:
 
 ### Basic CLI
 
-Every data verb takes the same `<ddl> <sqlite> <logdir>` trio (here `.` is the tx-log dir - the current directory), then its own arguments. Working with the `todo.ddl` above:
+Register your schema once, then refer to the database by name - you never spell out the schema, view, or log paths again:
 
 ```
-# build the local view from the schema
-ngdb build todo.ddl todo.sqlite
+# register the todo.ddl in this directory as the database "todo"
+ngdb --init
 
 # add a top-level task; the command prints the new row's id
-ngdb create todo.ddl todo.sqlite . task title="Ship v1" status=open
+ngdb create todo task title="Ship v1" status=open
 
 # add a subtask under it (paste the parent id from above)
-ngdb create todo.ddl todo.sqlite . task title="Write docs" parent_task=<parent-id>
+ngdb create todo task title="Write docs" parent_task=<parent-id>
 
 # add a comment to a task, then list its comments
-ngdb comment  todo.ddl todo.sqlite . task <id> "kickoff notes"
-ngdb comments todo.ddl todo.sqlite . task <id>
+ngdb comment  todo task <id> "kickoff notes"
+ngdb comments todo task <id>
 
 # read it back
-ngdb query todo.ddl todo.sqlite . "SELECT title, status FROM task WHERE is_deleted = 0"
+ngdb query todo "SELECT title, status FROM task WHERE is_deleted = 0"
 ```
 
-Prefer a UI? `ngdb --tui todo.ddl todo.sqlite .` opens the terminal UI over the same database, and `ngdb --serve todo.ddl todo.sqlite .` serves a local web UI on `127.0.0.1:8765`.
+The database name is the first argument; if you'd rather be explicit, `--db=todo --table=task` flags work in any order too. Run a bare `ngdb` to see a picker of your registered databases.
 
-Tired of typing paths? Run `ngdb --init` in the directory with your `todo.ddl` to register it; after that, a bare `ngdb` shows a picker of your databases (or run `--init` inside a git repo to auto-place the synced tx-log under it). See [Startup discovery](syntax.md#startup-discovery-and-the-database-registry).
+Prefer a UI? `ngdb --tui todo` opens the terminal UI over that database, and `ngdb --serve todo` serves a local web UI on `127.0.0.1:8765`. Run `--init` inside a git repo to auto-place the synced tx-log under it. See [Startup discovery](syntax.md#startup-discovery-and-the-database-registry).
 
 ## Full syntax reference
 
@@ -302,7 +236,7 @@ The complete DDL, sidecar-file (named queries, triggers), CLI, run-mode, access-
 
 ## Support nano-git-db
 
-nano-git-db is written and maintained by one programmer in his spare time. If you like this thing, use it often, and/or it saves you time - sponsoring it keeps it moving!
+nano-git-db is written and maintained by one programmer in his spare time. If you use it often, or it saves you time, sponsoring it keeps it moving.
 
 Even a few dollars a month is meaningful. Or just buy me a coffee.
 
@@ -317,16 +251,16 @@ Even a few dollars a month is meaningful. Or just buy me a coffee.
 
 **Get the word out**
 
-Tell other developers and teams on various socials how this has changed your life!
+Tell other developers and teams about it wherever you hang out.
 
 - [r/git](https://www.reddit.com/r/git/)
-- [Hacker News](news.ycombinator.com)
+- [Hacker News](https://news.ycombinator.com)
 - [r/selfhosted](https://www.reddit.com/r/selfhosted/)
 
 ## Copyright and license
 
 > Copyright © 2025-26 Jim Collier (ID: 1cv◂‡Vᛦ)<br />
-> Licensed under the [GNU Affero General Public License v3.0](LICENSE) (`AGPL-3.0-only`). No warranty.
+> Licensed under the [GNU Affero General Public License v3.0](license.md) (`AGPL-3.0-only`). No warranty.
 
 The AGPL's network-use clause is deliberate. If you run a modified nano-git-db as a network service, you must offer users your source. A separately licensed enterprise edition is also available under different terms. Outside contributions need a signed [Contributor License Agreement](CLA.md). See [contributing.md](contributing.md).
 <!--

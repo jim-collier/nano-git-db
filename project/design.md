@@ -12,16 +12,24 @@
 <!-- TOC -->
 
 - [Goal](#goal)
-- [Architecture](#architecture)
+- [CI/CD pipeline](#cicd-pipeline)
 - [Language and stack](#language-and-stack)
+- [Architecture](#architecture)
 - [Logical code organization](#logical-code-organization)
 - [Initial high-level features](#initial-high-level-features)
 	- [User-definable DDL](#user-definable-ddl)
 	- [Transaction log](#transaction-log)
+	- [Scripting triggers](#scripting-triggers)
+	- [Schema renames](#schema-renames)
 	- [Tunable options](#tunable-options)
+	- [Startup discovery and database registry](#startup-discovery-and-database-registry)
 	- [UI](#ui)
 	- [Predefined queries](#predefined-queries)
 	- [Optional granular access model](#optional-granular-access-model)
+	- [Startup notice and read-only mode](#startup-notice-and-read-only-mode)
+	- [Web login](#web-login)
+	- [Donations](#donations)
+	- [Encrypted transaction log](#encrypted-transaction-log)
 	- [Tables created automatically at new startup and verified in the background every startup](#tables-created-automatically-at-new-startup-and-verified-in-the-background-every-startup)
 		- [Always created and used](#always-created-and-used)
 			- [Users](#users)
@@ -87,12 +95,11 @@ One binary, four front-ends (see Architecture). UI is two pure-Go tiers: a **TUI
 One static binary, a shared core with four thin front-end adapters over it. Build the engine once; each interface is a mode selected at startup.
 
 ~~~text
-                 +----------- core engine (internal API) -----------+
+                 ------------ core engine (internal API) -------------
                  |  DDL parse . SQLite view . git tx-log . CRUD      |
-                 +--^----------^-----------^--------------^----------+
+                 -----------------------------------------------------
                     |          |           |              |
-   main dispatch:  CLI        Lua host    TUI            Web server
-   (by args)      (flag)   (gopher-lua)  (tview)   (net/http + embed + htmx)
+main dispatch:     CLI      Lua host      TUI         Web server
 ~~~
 
 - **CLI arg API** - stdlib `flag`, calls core directly.
@@ -236,10 +243,12 @@ v1 notes: tunables live in a `tunables:` DDL section; both `key: value` and the 
 
 ### Startup discovery and database registry
 
-How a run finds a database when it was not handed the explicit `<ddl> <sqlite> <logdir>` triple:
+A database is addressed by the name it was registered under: every CLI verb and `--tui`/`--serve` takes that name as their target and resolve the `ddl`/`sqlite`/`logdir` from the registry record, so those paths never appear on the command line (CRUD is name-only by design; the low-level `build`/`replay`/`sync`/`gc` verbs keep an explicit-path form for pre-registration use). The name resolves with or without a file extension, and may be given positionally or via `--db`/`--table` flags.
+
+How a run finds a database when it was not handed a name:
 
 - A lone `*.ddl` in the current directory is used directly (the sqlite view defaults beside it, the tx-log dir is that directory). Zero or several `.ddl` files are ambiguous, so discovery falls through.
-- Otherwise the interactive front-end (bare `ngdb` or `--tui`) shows a registry picker; the non-interactive ones (`--serve`, CLI verbs) require the explicit paths and error otherwise (no picker).
+- Otherwise the interactive front-end (bare `ngdb` or `--tui`) shows a registry picker; the non-interactive ones (`--serve`, CLI verbs) require a name and error otherwise (no picker).
 
 The registry is per-database TOML records under a config base: `<os-user-config>/ngdb/<name>/config.toml`, where the base is `$XDG_CONFIG_HOME` (else `~/.config`) on Linux, `%AppData%` on Windows, `~/Library/Application Support` on macOS - whatever `os.UserConfigDir` returns. Read-only system bases (`$XDG_CONFIG_DIRS`, default `/etc/xdg`; `%ProgramData%` on Windows) are also searched, after the user base. A record holds: `name`, `ddl_path`, `log_dir` (the git-synced artifacts), `sqlite_path`, `key_file` (local, unsynced; both default beside the record and are rebuildable / re-fetchable), `encryption` and `last_opened`. `key_file`/`encryption` are stored for a stable format ahead of the encryption feature.
 
@@ -324,7 +333,7 @@ Core tables like Users, Groups, etc. also inherit things like audit trail, comme
 
 These tables, the ones are automatically managed, have `cascade_delete` enabled if appropriate.
 
-These are defined in a single source code file (not end-user editable), with the [same DDL language](project/example.ddl) that users use.
+These are defined in a single source code file (not end-user editable), with the [same DDL language](example.ddl) that users use.
 
 #### Always created and used
 

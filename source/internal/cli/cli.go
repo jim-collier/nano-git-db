@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright © 2026 Jim Collier
 
-// Package cli is the arg-based CRUD front-end. Every data verb takes the same
-// <ddl> <sqlite> <logdir> triple - stateless and script-friendly until the
-// planned config file lands. Writes stamp the user from NANOGITDB_USER, else
-// the OS username.
+// Package cli is the arg-based CRUD front-end. A data verb names one registered
+// database (the name its config record was registered under, extension
+// optional) and never spells out the ddl/sqlite/log paths - those live in the
+// registry. The name is the first positional, or a --db/-d flag. The low-level
+// schema/log verbs (build/replay/sync/gc) also take a name, and keep an
+// explicit-path form for use before a database is registered. Writes stamp the
+// user from NANOGITDB_USER, else the OS username.
 package cli
 
 import (
@@ -27,48 +30,275 @@ import (
 
 // Run is the CLI entry point.
 func Run(args []string) error {
-	switch {
-	case len(args) >= 2 && args[0] == "ddl":
-		return dumpDDL(args[1])
-	case len(args) >= 3 && args[0] == "build":
-		return buildDB(args[1], args[2])
-	case len(args) >= 4 && args[0] == "replay":
-		return replay(args[1], args[2], args[3])
-	case len(args) >= 4 && args[0] == "sync":
-		return syncAndReplay(args[1], args[2], args[3])
-	case len(args) >= 2 && args[0] == "sync":
-		return syncLog(args[1])
-	case len(args) >= 3 && args[0] == "gc":
-		return gcLog(args[1], args[2])
-	case len(args) >= 6 && args[0] == "create":
-		return crudCreate(args[1:4], args[4], args[5:])
-	case len(args) >= 6 && args[0] == "get":
-		return crudGet(args[1:4], args[4], args[5])
-	case len(args) >= 7 && args[0] == "update":
-		return crudUpdate(args[1:4], args[4], args[5], args[6:])
-	case len(args) >= 7 && args[0] == "setnull":
-		return crudSetNull(args[1:4], args[4], args[5], args[6])
-	case len(args) >= 6 && (args[0] == "markdelete" || args[0] == "delete"):
-		return crudDelete(args[0], args[1:4], args[4], args[5])
-	case len(args) >= 5 && args[0] == "query":
-		return crudQuery(args[1:4], args[4])
-	case len(args) >= 7 && args[0] == "comment":
-		return crudComment(args[1:4], args[4], args[5], strings.Join(args[6:], " "))
-	case len(args) >= 6 && args[0] == "comments":
-		return crudComments(args[1:4], args[4], args[5])
-	case len(args) >= 7 && args[0] == "attachuri":
-		return crudAttach(args[1:4], args[4], args[5], args[6], strings.Join(args[7:], " "), false)
-	case len(args) >= 7 && args[0] == "attachfile":
-		return crudAttach(args[1:4], args[4], args[5], args[6], strings.Join(args[7:], " "), true)
-	case len(args) >= 6 && args[0] == "attachments":
-		return crudAttachments(args[1:4], args[4], args[5])
-	case len(args) >= 5 && args[0] == "--rename-table":
-		return renameTable(args[1], args[2], args[3], args[4])
-	case len(args) >= 6 && args[0] == "--rename-field":
-		return renameField(args[1], args[2], args[3], args[4], args[5])
-	case len(args) >= 2 && args[0] == "webuser":
-		return webUser(args[1])
+	if len(args) == 0 {
+		return usage()
 	}
+	verb, rest := args[0], args[1:]
+	switch verb {
+	case "ddl":
+		if len(rest) >= 1 {
+			return dumpDDL(rest[0])
+		}
+	case "build":
+		return doBuild(rest)
+	case "replay":
+		return doReplay(rest)
+	case "sync":
+		return doSync(rest)
+	case "gc":
+		return doGC(rest)
+	case "create", "get", "update", "setnull", "markdelete", "delete", "query",
+		"comment", "comments", "attachuri", "attachfile", "attachments":
+		return doData(verb, rest)
+	case "--rename-table":
+		return doRenameTable(rest)
+	case "--rename-field":
+		return doRenameField(rest)
+	case "webuser":
+		if len(rest) >= 1 {
+			return webUser(rest[0])
+		}
+	}
+	return usage()
+}
+
+// crudSelect pulls the leading database and (optional) table selectors off a
+// data verb's args. Each can be given two ways: the database positionally
+// (the first bare word) or as --db/-d, the table positionally (the next bare
+// word) or as --table/-t. The explicit flags accept both "--db name" and
+// "--db=name" and may lead in any order. Data verbs are name-only by design -
+// the raw ddl/sqlite/log paths are never spelled out for CRUD.
+//
+// It returns the database's open triple, the table (empty when the verb reads
+// it positionally, filled when a --table flag supplied it), and the remaining
+// positional args (id, assignments, sql...).
+func crudSelect(args []string) (paths []string, table string, rest []string, err error) {
+	var name string
+	// consume any leading --db/--table flags, in any order
+	for len(args) > 0 {
+		arg := args[0]
+		switch {
+		case arg == "--db" || arg == "-d":
+			if len(args) < 2 {
+				return nil, "", nil, fmt.Errorf("%s needs a database name", arg)
+			}
+			name, args = args[1], args[2:]
+		case arg == "--table" || arg == "-t":
+			if len(args) < 2 {
+				return nil, "", nil, fmt.Errorf("%s needs a table name", arg)
+			}
+			table, args = args[1], args[2:]
+		default:
+			if val, ok := cutFlag(arg, "--db", "-d"); ok {
+				name, args = val, args[1:]
+			} else if val, ok := cutFlag(arg, "--table", "-t"); ok {
+				table, args = val, args[1:]
+			} else if name == "" { // first bare word is the database name
+				name, args = arg, args[1:]
+			} else {
+				goto done // remaining bare words are the verb's positionals
+			}
+		}
+	}
+done:
+	if name == "" {
+		return nil, "", nil, fmt.Errorf("missing database name")
+	}
+	cfg := config.FindByName(name)
+	if cfg == nil {
+		return nil, "", nil, fmt.Errorf("unknown database %q; register it with --init or list the known ones by running ngdb with no arguments", name)
+	}
+	_ = cfg.Touch() // best-effort last-opened stamp
+	return []string{cfg.DDLPath, cfg.SQLitePath, cfg.LogDir}, table, args, nil
+}
+
+// cutFlag matches "--db=value" / "-d=value" style selectors.
+func cutFlag(arg string, names ...string) (value string, ok bool) {
+	for _, name := range names {
+		if v, found := strings.CutPrefix(arg, name+"="); found {
+			return v, true
+		}
+	}
+	return "", false
+}
+
+// nameTriple resolves a registered database name to its (ddl, sqlite, logdir)
+// paths; ok is false when no such name is registered. The low-level verbs use
+// it to accept a name yet still fall back to their explicit-path form.
+func nameTriple(name string) (ddlPath, sqlitePath, logDir string, ok bool) {
+	if cfg := config.FindByName(name); cfg != nil {
+		return cfg.DDLPath, cfg.SQLitePath, cfg.LogDir, true
+	}
+	return "", "", "", false
+}
+
+// doData resolves the named database and dispatches one CRUD verb over it. The
+// query verb takes SQL rather than a table; every other verb needs a table,
+// taken from a --table flag or the next positional.
+func doData(verb string, args []string) error {
+	paths, table, rest, err := crudSelect(args)
+	if err != nil {
+		return err
+	}
+	if verb == "query" {
+		if len(rest) < 1 {
+			return fmt.Errorf("usage: ngdb query <db> <sql>")
+		}
+		return crudQuery(paths, rest[0])
+	}
+	// every other verb needs a table: the --table flag, else the next positional
+	if table == "" {
+		if len(rest) < 1 {
+			return fmt.Errorf("usage: ngdb %s <db> <table> <args>", verb)
+		}
+		table, rest = rest[0], rest[1:]
+	}
+	need := func(n int, form string) error {
+		if len(rest) < n {
+			return fmt.Errorf("usage: ngdb %s <db> <table> %s", verb, form)
+		}
+		return nil
+	}
+	switch verb {
+	case "create":
+		return crudCreate(paths, table, rest)
+	case "get":
+		if err := need(1, "<id>"); err != nil {
+			return err
+		}
+		return crudGet(paths, table, rest[0])
+	case "update":
+		if err := need(2, "<id> f=v [f=v...]"); err != nil {
+			return err
+		}
+		return crudUpdate(paths, table, rest[0], rest[1:])
+	case "setnull":
+		if err := need(2, "<id> <field>"); err != nil {
+			return err
+		}
+		return crudSetNull(paths, table, rest[0], rest[1])
+	case "markdelete", "delete":
+		if err := need(1, "<id>"); err != nil {
+			return err
+		}
+		return crudDelete(verb, paths, table, rest[0])
+	case "comment":
+		if err := need(2, "<id> <text>"); err != nil {
+			return err
+		}
+		return crudComment(paths, table, rest[0], strings.Join(rest[1:], " "))
+	case "comments":
+		if err := need(1, "<id>"); err != nil {
+			return err
+		}
+		return crudComments(paths, table, rest[0])
+	case "attachuri":
+		if err := need(2, "<id> <uri> [desc]"); err != nil {
+			return err
+		}
+		return crudAttach(paths, table, rest[0], rest[1], strings.Join(rest[2:], " "), false)
+	case "attachfile":
+		if err := need(2, "<id> <path> [desc]"); err != nil {
+			return err
+		}
+		return crudAttach(paths, table, rest[0], rest[1], strings.Join(rest[2:], " "), true)
+	case "attachments":
+		if err := need(1, "<id>"); err != nil {
+			return err
+		}
+		return crudAttachments(paths, table, rest[0])
+	}
+	return usage()
+}
+
+// doBuild builds/migrates a view: build <db>, or the explicit build <ddl> <sqlite>.
+func doBuild(args []string) error {
+	if len(args) == 1 {
+		if ddlPath, sqlitePath, _, ok := nameTriple(args[0]); ok {
+			return buildDB(ddlPath, sqlitePath)
+		}
+		return fmt.Errorf("unknown database %q (or use build <ddl> <sqlite>)", args[0])
+	}
+	if len(args) >= 2 {
+		return buildDB(args[0], args[1])
+	}
+	return usage()
+}
+
+// doReplay rebuilds a view from its log: replay <db>, or replay <ddl> <sqlite> <dir>.
+func doReplay(args []string) error {
+	if len(args) == 1 {
+		if ddlPath, sqlitePath, logDir, ok := nameTriple(args[0]); ok {
+			return replay(ddlPath, sqlitePath, logDir)
+		}
+		return fmt.Errorf("unknown database %q (or use replay <ddl> <sqlite> <logdir>)", args[0])
+	}
+	if len(args) >= 3 {
+		return replay(args[0], args[1], args[2])
+	}
+	return usage()
+}
+
+// doSync syncs the log via git: sync <db> also migrates + replays; sync <logdir>
+// only reconciles the log; sync <ddl> <sqlite> <dir> is the explicit full cycle.
+func doSync(args []string) error {
+	if len(args) == 1 {
+		if ddlPath, sqlitePath, logDir, ok := nameTriple(args[0]); ok {
+			return syncAndReplay(ddlPath, sqlitePath, logDir)
+		}
+		return syncLog(args[0]) // not a name: treat it as a log directory
+	}
+	if len(args) >= 3 {
+		return syncAndReplay(args[0], args[1], args[2])
+	}
+	return usage()
+}
+
+// doGC collects long-deleted entries: gc <db>, or gc <ddl> <logdir>.
+func doGC(args []string) error {
+	if len(args) == 1 {
+		if ddlPath, _, logDir, ok := nameTriple(args[0]); ok {
+			return gcLog(ddlPath, logDir)
+		}
+		return fmt.Errorf("unknown database %q (or use gc <ddl> <logdir>)", args[0])
+	}
+	if len(args) >= 2 {
+		return gcLog(args[0], args[1])
+	}
+	return usage()
+}
+
+// doRenameTable: --rename-table <db> <old> <new>, or the explicit
+// --rename-table <ddl> <sqlite> <old> <new>.
+func doRenameTable(args []string) error {
+	if len(args) == 3 {
+		if ddlPath, sqlitePath, _, ok := nameTriple(args[0]); ok {
+			return renameTable(ddlPath, sqlitePath, args[1], args[2])
+		}
+		return fmt.Errorf("unknown database %q (or use --rename-table <ddl> <sqlite> <old> <new>)", args[0])
+	}
+	if len(args) >= 4 {
+		return renameTable(args[0], args[1], args[2], args[3])
+	}
+	return usage()
+}
+
+// doRenameField: --rename-field <db> <table> <old> <new>, or the explicit
+// --rename-field <ddl> <sqlite> <table> <old> <new>.
+func doRenameField(args []string) error {
+	if len(args) == 4 {
+		if ddlPath, sqlitePath, _, ok := nameTriple(args[0]); ok {
+			return renameField(ddlPath, sqlitePath, args[1], args[2], args[3])
+		}
+		return fmt.Errorf("unknown database %q (or use --rename-field <ddl> <sqlite> <table> <old> <new>)", args[0])
+	}
+	if len(args) >= 5 {
+		return renameField(args[0], args[1], args[2], args[3], args[4])
+	}
+	return usage()
+}
+
+func usage() error {
 	fmt.Println("usage: ngdb <verb> ...")
 	fmt.Println("  setup and run modes:")
 	fmt.Println("    --init [repo-or-dir]           register the $PWD .ddl as a database")
@@ -77,8 +307,8 @@ func Run(args []string) error {
 		fmt.Println("    --encrypt[=on|off|auto] ...    set the local encryption preference,")
 		fmt.Println("                                   then run (--init --encrypt=on mints a key)")
 	}
-	fmt.Println("    --tui [<ddl> <sqlite> <dir>]   terminal UI (no paths: pick/create a db)")
-	fmt.Println("    --serve [<ddl> <sqlite> <dir>] local web UI on 127.0.0.1:8765")
+	fmt.Println("    --tui [<db>]                   terminal UI (no name: pick/create a db)")
+	fmt.Println("    --serve [<db>]                 local web UI on 127.0.0.1:8765")
 	fmt.Println("    webuser <username>             set a proxied-mode web login")
 	fmt.Println("                                   (password from NGDB_WEB_PASSWORD or prompt)")
 	fmt.Println("    --script <f.lua> <ddl> <sqlite> <dir>   run a Lua script")
@@ -86,32 +316,35 @@ func Run(args []string) error {
 		fmt.Println("    --donate                       ways to support the project")
 	}
 	fmt.Println("    --version, -v                  print the version and exit")
+	fmt.Println("  <db> is a registered database name (extension optional). Register one")
+	fmt.Println("  with --init; run ngdb with no arguments to see the ones you have.")
 	fmt.Println("  schema and log:")
-	fmt.Println("    ddl <file>                     parse a DDL and print a summary")
-	fmt.Println("    build <ddl> <sqlite>           build/migrate a SQLite view from a DDL")
-	fmt.Println("    replay <ddl> <sqlite> <dir>    rebuild the view from a tx-log dir")
-	fmt.Println("    sync <logdir>                  commit + pull/push the tx-log via git")
-	fmt.Println("    sync <ddl> <sqlite> <dir>      sync, then migrate the view and replay")
-	fmt.Println("    gc <ddl> <logdir>              collect entries of long-deleted rows")
+	fmt.Println("    ddl <file>                     parse a DDL file and print a summary")
+	fmt.Println("    build <db>                     build/migrate the SQLite view")
+	fmt.Println("    replay <db>                    rebuild the view from the tx-log")
+	fmt.Println("    sync <db>                      sync the log, then migrate and replay")
+	fmt.Println("    gc <db>                         collect entries of long-deleted rows")
 	fmt.Println("                                   (gc_age_days tunable, default 90)")
-	fmt.Println("  data (all take the same <ddl> <sqlite> <logdir> triple, then):")
-	fmt.Println("    create ... <table> f=v [f=v...]        insert a row; prints its id")
-	fmt.Println("    get ... <table> <id>                   print one row")
-	fmt.Println("    update ... <table> <id> f=v [f=v...]   set fields")
-	fmt.Println("    setnull ... <table> <id> <field>       set a field to SQL NULL")
-	fmt.Println("    markdelete ... <table> <id>            soft-delete")
-	fmt.Println("    delete ... <table> <id>                hard-delete")
-	fmt.Println("    query ... <sql>                        read-only SQL against the view")
+	fmt.Println("  data (each takes a <db>, then a <table>; e.g. create issues task f=v):")
+	fmt.Println("    create <db> <table> f=v [f=v...]     insert a row; prints its id")
+	fmt.Println("    get <db> <table> <id>                print one row")
+	fmt.Println("    update <db> <table> <id> f=v [...]   set fields")
+	fmt.Println("    setnull <db> <table> <id> <field>    set a field to SQL NULL")
+	fmt.Println("    markdelete <db> <table> <id>         soft-delete")
+	fmt.Println("    delete <db> <table> <id>             hard-delete")
+	fmt.Println("    query <db> <sql>                     read-only SQL against the view")
+	fmt.Println("    the db and table may also be given explicitly as flags in any order:")
+	fmt.Println("      --db=<name> / -d <name>,  --table=<name> / -t <name>")
 	fmt.Println("  schema ops (rewrite the DDL file and the SQLite view; the old name")
 	fmt.Println("  becomes an alias so existing tx-log entries still replay):")
-	fmt.Println("    --rename-table <ddl> <sqlite> <old> <new>")
-	fmt.Println("    --rename-field <ddl> <sqlite> <table> <old> <new>")
+	fmt.Println("    --rename-table <db> <old> <new>")
+	fmt.Println("    --rename-field <db> <table> <old> <new>")
 	fmt.Println("  opt-in features (table must enable them in its DDL features: block):")
-	fmt.Println("    comment ... <table> <id> <text>            add a comment to a row")
-	fmt.Println("    comments ... <table> <id>                  list a row's comments")
-	fmt.Println("    attachuri ... <table> <id> <uri> [desc]    attach a link-in-place URI")
-	fmt.Println("    attachfile ... <table> <id> <path> [desc]  copy a file in and attach it")
-	fmt.Println("    attachments ... <table> <id>               list a row's attachments")
+	fmt.Println("    comment <db> <table> <id> <text>           add a comment to a row")
+	fmt.Println("    comments <db> <table> <id>                 list a row's comments")
+	fmt.Println("    attachuri <db> <table> <id> <uri> [desc]   attach a link-in-place URI")
+	fmt.Println("    attachfile <db> <table> <id> <path> [desc] copy a file in and attach it")
+	fmt.Println("    attachments <db> <table> <id>              list a row's attachments")
 	fmt.Println("  writes are stamped with NANOGITDB_USER (default: the OS username)")
 	return nil
 }

@@ -1,0 +1,20 @@
+# Dependency + toolchain bumps arrive as PRs against dev (the integration branch).
+# Minor/patch bumps are grouped into one PR each to keep the noise down.
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/source"
+    schedule:
+      interval: "weekly"
+    target-branch: "dev"
+    groups:
+      go-modules:
+        update-types: ["minor", "patch"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "dev"
+    groups:
+      actions:
+        update-types: ["minor", "patch"]
