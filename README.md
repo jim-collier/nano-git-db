@@ -66,7 +66,6 @@ nano-git-db is a small database for one person or a whole team. You define it in
 - [Why another database?](#why-another-database)
 - [Features](#features)
 - [Enterprise edition](#enterprise-edition)
-- [Screenshots](#screenshots)
 - [What a database is, on disk](#what-a-database-is-on-disk)
 - [Example use cases](#example-use-cases)
 - [Installing](#installing)
@@ -122,18 +121,6 @@ nano-git-db is open source and complete on its own. A separately licensed enterp
 - Planned: a REST API for network access.
 
 The open-source build can share and sync an encrypted database, but only the enterprise build can read and write the encrypted fields.
-
-## Screenshots
-
-The terminal UI, shown with the included example issue tracker. Click any image for the full-size version.
-
-<p align="center">
-	<a href="assets/screenshots/large/1-picker.png"><img src="assets/screenshots/1-picker.png" width="32%" alt="Startup picker: choose from your registered databases"/></a>
-	<a href="assets/screenshots/large/2-view.png"><img src="assets/screenshots/2-view.png" width="32%" alt="A view: hierarchical tasks in a tree grid"/></a>
-	<a href="assets/screenshots/large/3-table.png"><img src="assets/screenshots/3-table.png" width="32%" alt="Table rows beside the list of views and tables"/></a>
-	<a href="assets/screenshots/large/4-form.png"><img src="assets/screenshots/4-form.png" width="32%" alt="Editing a record; saving writes only the changed fields"/></a>
-	<a href="assets/screenshots/large/5-theme.png"><img src="assets/screenshots/5-theme.png" width="32%" alt="Theme picker with six built-in light and dark themes"/></a>
-</p>
 
 ## What a database is, on disk
 
