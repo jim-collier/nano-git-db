@@ -51,45 +51,65 @@ A multi-user database that syncs with `git`. The single source of truth is an ap
 
 ## Why another database?
 
-Plenty of tools each do one of these. Few do all of them at once:
+Plenty of tools each do some of these. None do all of them at once:
 
-- Tiny and local, one small binary.
-- Multi-user and synced across a team - here, over `git`, with conflicts auto-merged.
-- Defined without SQL, in a friendly text schema you edit by hand.
+- Tiny and local, one small binary that serves the CLI, TUI, and local web UI.
+
+- Multi-user, synced across a team via `git` - with "conflicts" (the expected norm) auto-merged per-field, in an unsurprising way.
+
+- Defined without SQL, in a friendly text schema you edit by hand. (But supports the full SQL syntax and indexes for queries.)
+
 - Stored as human-readable text you can diff, grep, review, and back up like any other file.
 
-nano-git-db is all four.
+`nano-git-db` is all four.
 
 ## Features
 
 - Syncs records across people and auto-merges their changes with `git`.
+
 - Git is optional. On its own it's a fast local single-user database, or a self-hosted web app.
+
 - One small static binary, no external dependencies - three front-ends over one shared core:
 	- a full CRUD command line,
 	- a terminal UI that works fine over SSH, with built-in light and dark themes,
 	- a self-hosted web UI, local-only or shared to your network with password sign-in.
 - Schema defined in a plain text file - a friendly YAML-style DDL, no SQL to write.
+
 - Change the schema anytime. Old and new records stay compatible both ways, so there's never a migration.
+
 - Rename tables and fields without losing or rewriting history.
+
 - Views, including hierarchical tree grids - a task tree, an outline, a threaded board.
+
 - Saved queries kept next to the schema and picked from a menu.
+
 - Per-table extras, opt-in: a comment thread per record, an automatic audit trail of every change, and file or link attachments.
+
 - Users and groups, with permissions down to the table, field, and row.
+
 - Old deleted records are cleaned out of the log automatically, so it doesn't grow forever.
+
 - Register a database once, then refer to it by name and pick from a list at startup.
+
 - SQLite under the hood as a rebuildable local view - the `.sqlite` file stays out of the repo; only the text log is synced.
+
 - Runs on Linux and Windows. macOS builds from source (no prebuilt binary yet).
 
 ## Enterprise edition
 
-nano-git-db is open source and complete on its own. A separately licensed enterprise edition adds features some teams need, built into the same single binary.
+`nano-git-db` is open source and complete on its own. A separately licensed enterprise edition adds features some teams need, built into the same single binary.
 
 - At-rest encryption of field values in the synced log. The git host can't read your data, while your local database stays fully queryable. Each database has its own key, kept out of the repo, with a per-field, per-table, or per-database policy set by an `encryption: always|never|auto` DDL key.
+
 - Lua scripting. Run a script against the database with `--script`, or attach triggers and stored procedures to tables and fields through the DDL's `code:` keys. Scripts reach the data only through the same safe calls the rest of the program uses.
-- Planned: an authenticator app, passkeys, and optional Google, Microsoft, or LinkedIn sign-in for the web UI. (Basic password sign-in already ships in the open-source build.)
-- Planned: a REST API for network access.
+
+- Coming soon: an authenticator app, passkeys, and optional Google, Microsoft, or LinkedIn sign-in for the web UI. (Basic password sign-in already ships in the open-source build.)
+
+- Coming soon: a REST API for network access.
 
 The open-source build can share and sync an encrypted database, but only the enterprise build can read and write the encrypted fields.
+
+The existing functionality and feature set in this open-source version will never shrink or be nerfed (only grow and improve). This version will always be free and open-source. (As required by the license. And this project can be forked for presevation at any time - public repos help keep promises like these honest.)
 
 ## What a database is, on disk
 
@@ -205,7 +225,7 @@ The complete DDL, sidecar-file (named queries, triggers), CLI, run-mode, access-
 
 ## Support nano-git-db
 
-nano-git-db is written and maintained by one programmer in his spare time. If you use it often, or it saves you time, sponsoring it keeps it moving.
+`nano-git-db` is written and maintained by one programmer in his spare time. If you use it often, or it saves you time, sponsoring it keeps it moving.
 
 Even a few dollars a month is meaningful. Or just buy me a coffee.
 
@@ -231,11 +251,6 @@ Tell other developers and teams about it wherever you hang out.
 > Copyright © 2025-26 Jim Collier (ID: 1cv◂‡Vᛦ)<br />
 > Licensed under the [GNU Affero General Public License v3.0](license.md) (`AGPL-3.0-only`). No warranty.
 
-The AGPL's network-use clause is deliberate. If you run a modified nano-git-db as a network service, you must offer users your source. A separately licensed enterprise edition is also available under different terms. Outside contributions need a signed [Contributor License Agreement](CLA.md). See [contributing.md](contributing.md).
-<!--
-> Licensed under the [MIT License](https://mit-license.org/). No warranty.
-> Licensed under the [GNU General Public License v2.0](https://www.gnu.org/licenses/gpl-2.0.html). No warranty.
-> Licensed under the [GNU General Public License v2.0 or later](https://spdx.org/licenses/GPL-2.0-or-later.html). No warranty.
-> Licensed under the [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.en.html) license. No warranty.
-> Licensed under the [Mozilla Public License 2.0](https://mozilla.org/MPL/2.0/). No warranty.
--->
+The AGPL's network-use "SaaS" clause (what specifically differentiates it from regular GPL) is deliberate. If you run a modified `nano-git-db` as a network service - which anyone is free and encouraged to do - you must offer users your source so that others can continue to build on your work, and so on.
+
+Separately from that, a licensed enterprise edition is also available under different terms. Therefore, as with *all* "Community/Commercial" or "FLOSS/Enterprise" projects like this - including all the big ones you know like Red Hat, Kubernetes, VSCode, WordPress, MongoDB, GitLab - outside contributions must legally sign a [Contributor License Agreement](CLA.md) for the model to work, and therefore to be able to contribute code in the first place. See [contributing.md](contributing.md).
