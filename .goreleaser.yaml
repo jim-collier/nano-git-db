@@ -52,6 +52,8 @@ checksum:
   name_template: checksums.txt
 
 release:
+  # -alpha/-beta/-rc tags land as a GitHub pre-release (not flagged Latest)
+  prerelease: auto
   github:
     owner: jim-collier
     name: nano-git-db
