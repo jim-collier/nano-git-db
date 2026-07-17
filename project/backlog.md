@@ -54,6 +54,17 @@ In each section, items are listed approximately from newest to oldest.
 
 ### New features and enhancements
 
+- 🔘 Demo gif:
+	- One more TUI CRUD example.
+	- For CLI CRUD:
+		- Smooth output scrolling, smooth cursor blink, and smooth cursor movement.
+		- Before starting CLI examples, start with a comment line: "# The CLI also supports full CRUD and query operations ..."
+		- Always specify db with `--db=` rather than by position, and table with `--table=`.
+		- Change last line to: # nano-git-db.
+	- Faux terminal window decorations should have square corners, and take up the entire view except for a 4px black outline.
+
+- 🔘 Use sister project 'SHCL' as the engine for config and DDL files.
+
 - 🛠️ Optional encrypted data in the transaction log. The local SQLite copy is always decrypted.
 	- Reason: keep the log unreadable to the git host, or to anyone who gets the repo.
 	- Note: some columns stay clear so git can still merge and replay (table and field names, row id, user, host, counts). Only the field values are private.

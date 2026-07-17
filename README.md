@@ -61,7 +61,9 @@ Plenty of tools each do some of these. None do all of them at once:
 
 - Stored as human-readable text you can diff, grep, review, and back up like any other file.
 
-`nano-git-db` is all four.
+- Changes to the schema are backwards and forwards compatible by definition. No data is ever lost.
+
+`nano-git-db` is all of them.
 
 ## Features
 
