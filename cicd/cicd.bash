@@ -44,7 +44,7 @@ if [[ -z "${doQuietly+x}" ]]; then
 
 	## Generic constants
 	declare  -i doQuietly=0
-	declare  -i doQuick=0  ## --quick: skip the slow stages (cross-builds, fuzz, profiler, screenshots, govulncheck, gosec)
+	declare  -i doQuick=0  ## --quick: skip the slow stages (cross-builds, fuzz, profiler, govulncheck, gosec)
 	declare  -i doNoArm=0  ## --no-arm: build/package amd64 only (arm64 is cheap here, so this is just a run-time trim)
 	declare  -i doPromptToContinue=1
 	declare -r  thisVersion="1.0.0-beta3"         ## Put you script's semantic version here.
@@ -100,7 +100,7 @@ fSyntax(){  { ((doQuietly)) || ((wasShown_Syntax)); } && return; wasShown_Syntax
 	fEcho_Clean "Usage: ${meName} [options]"
 	fEcho_Clean "  -q, --quiet         Run unattended (no prompt) and quiet; flows to publish."
 	fEcho_Clean "      --quick         Skip the slow stages: cross-builds, packaging, fuzz,"
-	fEcho_Clean "                      profiler, screenshots, demo recording, govulncheck + gosec."
+	fEcho_Clean "                      profiler, demo recording, govulncheck + gosec."
 	fEcho_Clean "      --no-arm        Build/package amd64 only (skip arm64) to trim a full run."
 	fEcho_Clean "  -m, --message MSG   Commit message for publish (also --msg; -m MSG or -m=MSG)."
 	fEcho_Clean "                      With -q and no -m, a message is auto-generated."
@@ -162,7 +162,7 @@ fMain(){
 		fi
 		fEcho_Clean "Test script ..................: ${filePath_CICD_TestExec}"
 		if ((doQuick)); then
-		fEcho_Clean "Quick mode ...................: cross-builds + packaging + fuzz + profiler + screenshots + demo + govulncheck + gosec skipped"
+		fEcho_Clean "Quick mode ...................: cross-builds + packaging + fuzz + profiler + demo + govulncheck + gosec skipped"
 		fi
 		if ((doNoArm)); then
 		fEcho_Clean "No-arm mode ..................: arm64 builds + packages skipped (amd64 only)"
@@ -355,17 +355,16 @@ fMain(){
 		"${dirPath_Base}/cicd/utility/profile.bash"
 	fi
 
-	## Screenshots: regenerate the README thumbnails from the just-built binary
-	## (--no-build reuses it). Slow (headless capture), so --quick skips it. Note:
-	## the demo db uses fresh UUIDv7 ids each run, so most shots differ byte-wise
-	## every build - a full run will restage them for the publish below.
-	if ((doQuick)); then
-		fEcho_Section "Screenshots (skipped: --quick)"
-	elif [[ -x "${dirPath_Base}/utility/screenshots.bash" ]]; then
-		fEcho_Section "Screenshots"
-		"${dirPath_Base}/utility/screenshots.bash" --no-build
-		fEcho_Clean "Screenshots regenerated"
-	fi
+	## Screenshots stage disabled - the animated demo gif at the top of the README
+	## covers this, so the static thumbnails aren't worth restaging every build.
+	## Left here (commented) in case per-shot thumbnails are wanted again later.
+	#if ((doQuick)); then
+	#	fEcho_Section "Screenshots (skipped: --quick)"
+	#elif [[ -x "${dirPath_Base}/utility/screenshots.bash" ]]; then
+	#	fEcho_Section "Screenshots"
+	#	"${dirPath_Base}/utility/screenshots.bash" --no-build
+	#	fEcho_Clean "Screenshots regenerated"
+	#fi
 
 	## Demo recording: mp4 + looping gif of the TUI-then-CLI walkthrough. mp4 + the
 	## full gif land in ../private/demo-video/{video,gif} (GFS-rotated, not
