@@ -226,12 +226,12 @@ ui:
 Block keys:
 
 - `table:` - the table the block shows.
-- `type:` - `grid` (flat table), `tree_grid` (hierarchical, ordered depth-first along `parent_field`, indented by depth), or `form` (single-record panel).
+- `type:` - `grid` (flat table), `tree_grid` (hierarchical, ordered depth-first along `parent_field`, indented by depth), `form` (single-record panel), or `comments` (a detail pane over the table's `comments` feature - it follows a sibling list block's selected row and lists that row's thread with an add affordance; the comments never appear as a list column).
 - `parent_field:` - for `tree_grid`, the field holding a row's parent id (a self-reference). Rows with an empty or unknown parent are roots; orphans and cycles degrade to extra roots rather than hiding rows.
 - `location:` - `<relative-to>, <above|below|left|right>, <percent>` - sets a split's axis and share. The direction and percent are honored; the relative-to element is currently ignored (blocks place in DDL order).
 - `readonly:` - view-level, overridable per block.
 
-Blocks open empty (the "no records until asked" rule); the UI's "All" action or a named-query dropdown fills them, and `startup_named_query` fills one on open. A block over an unknown table is dropped with a warning; a bad `tree_grid` degrades to a plain grid.
+Blocks open empty (the "no records until asked" rule); the UI's "All" action or a named-query dropdown fills them, and `startup_named_query` fills one on open. A block over an unknown table is dropped with a warning; a bad `tree_grid` degrades to a plain grid; a `comments` block over a table without the comments feature is dropped with a warning.
 
 ## Tunables
 

@@ -157,6 +157,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /{$}", s.index)
 	mux.HandleFunc("GET /v/{view}", s.viewPage)
 	mux.HandleFunc("GET /v/{view}/b/{i}/rows", s.viewBlockRows)
+	mux.HandleFunc("GET /v/{view}/b/{i}/comments", s.viewBlockComments)
+	mux.HandleFunc("POST /v/{view}/b/{i}/comments", s.viewBlockComments)
 	mux.HandleFunc("GET /v/{view}/q", s.viewQuery)
 	if donate.Enabled { // open-source-only feature
 		mux.HandleFunc("GET /donate", s.donate)

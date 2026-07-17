@@ -67,6 +67,10 @@ ui:
 					table: task
 					type: tree_grid
 					parent_field: parent_task
+				block: 2
+					table: task
+					type: comments
+					location: 1, below, 35%
 	default_view: "tasks"
 DDL
 
