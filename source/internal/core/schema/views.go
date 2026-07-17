@@ -101,6 +101,32 @@ func (c *Catalog) View(name string) *ViewSpec {
 	return nil
 }
 
+// PrimaryForComments returns the leaf index whose selection a comments leaf
+// follows: the first non-comments leaf over the same table, or -1 when the
+// view has no such list block (the pane then stays empty until a row arrives).
+func (v *ViewSpec) PrimaryForComments(commentsIdx int) int {
+	table := v.Leaves[commentsIdx].Table
+	for i, leaf := range v.Leaves {
+		if i != commentsIdx && leaf.Type != "comments" && leaf.Table == table {
+			return i
+		}
+	}
+	return -1
+}
+
+// CommentsLeavesFor returns the comments leaves that follow a list leaf's
+// selection - the panes to refresh when its selected row changes.
+func (v *ViewSpec) CommentsLeavesFor(primaryIdx int) []int {
+	table := v.Leaves[primaryIdx].Table
+	var out []int
+	for i, leaf := range v.Leaves {
+		if i != primaryIdx && leaf.Type == "comments" && leaf.Table == table {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
 func (c *Catalog) warnf(format string, args ...any) {
 	c.Warnings = append(c.Warnings, fmt.Sprintf(format, args...))
 }
@@ -152,6 +178,15 @@ func (c *Catalog) resolveBlock(view string, block ddl.Block, inheritRO bool, lea
 			c.warnf("view %q block %q: tree_grid parent_field %q is not a field of %q, rendering as grid",
 				view, block.Name, block.ParentField, block.Table)
 			resolved.Type, resolved.ParentField = "grid", ""
+		}
+	case "comments":
+		// A detail pane over the table's built-in comments component; it follows
+		// a sibling list block's selected row. Only meaningful when the table
+		// opted in to comments - otherwise there is nothing to show.
+		if !c.Features[block.Table].Comments {
+			c.warnf("view %q block %q: table %q has no comments feature, dropped",
+				view, block.Name, block.Table)
+			return nil
 		}
 	default:
 		c.warnf("view %q block %q: unknown type %q, rendering as grid", view, block.Name, block.Type)

@@ -436,18 +436,17 @@ DB = "issues"
 QUERY_OPEN = "select assignee, status, title from task where status = 'open'"
 
 def seg_tui(r, t):
-	# launch straight into the tree_grid board, walk it, then edit a task for real:
-	# close it out in the form and Save, and the board redraws with the change
+	# launch into the tree_grid board; a comments pane sits below it and follows
+	# the selected task. Walk to one that already has a synced discussion, then
+	# add a comment - a 1:m detail the board list never shows as a column.
 	t.cmd(f"ngdb --tui {DB}", settle=2.2)
-	t.key("a"); time.sleep(1.8)              # load the board block
-	t.keys("Down", 4, hz=3.4); time.sleep(0.6)
-	t.keys("Up", 2, hz=3.0); time.sleep(0.6)
-	t.key("Return"); time.sleep(2.0)         # open the edit form for the task
-	t.key("Tab"); time.sleep(0.5)            # title -> status
-	t.keys("BackSpace", 4, hz=5.0)           # clear "open"
-	t.type("closed"); time.sleep(0.5)
-	t.keys("Tab", 5, hz=4.0)                 # remaining fields, onto Save itself
-	t.key("Return"); time.sleep(2.2)         # save; the board reloads updated
+	t.key("a"); time.sleep(1.6)              # load the task list
+	t.keys("Down", 3, hz=2.6); time.sleep(1.8)  # onto a task with a comment thread
+	t.key("Tab"); time.sleep(0.8)            # focus the comments pane below
+	t.key("Return"); time.sleep(1.0)         # open the new-comment prompt
+	t.type("Deployed the fix to staging"); time.sleep(0.5)
+	t.key("Tab"); time.sleep(0.4)            # onto Add
+	t.key("Return"); time.sleep(2.2)         # add; the thread reloads with it
 	t.key("q"); time.sleep(1.0)              # back out of the TUI
 
 def seg_cli(r, t):
@@ -628,3 +627,5 @@ if __name__ == "__main__":
 ##		  theme copy + pixel-exact resize), smooth scroll + blinking cursor,
 ##		  TUI edit-and-save beat replaces the theme beat, CLI uses --db/--table
 ##		  with a lead-in comment, shorter outro line.
+##		- 20260717 JC: TUI beat now adds a comment in the board's comments pane
+##		  (a linked 1:m detail) instead of editing status.

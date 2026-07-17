@@ -19,10 +19,11 @@ import (
 
 // blockPanel is one leaf block and the rows currently behind its table.
 type blockPanel struct {
-	b    *schema.ViewBlock
-	tbl  *tview.Table
-	rows []map[string]string // grid
-	tree []schema.TreeRow    // tree_grid
+	b        *schema.ViewBlock
+	tbl      *tview.Table
+	rows     []map[string]string // grid
+	tree     []schema.TreeRow    // tree_grid
+	parentID string              // comments: the row whose thread is shown
 }
 
 func (p *blockPanel) rowAt(r int) map[string]string {
@@ -61,6 +62,9 @@ func (a *App) openView(view *schema.ViewSpec) {
 			case ev.Key() == tcell.KeyTab:
 				a.app.SetFocus(next.tbl)
 				return nil
+			case panel.b.Type == "comments" && (ev.Key() == tcell.KeyEnter || ev.Rune() == 'n'):
+				a.addCommentForm(panel)
+				return nil
 			case ev.Rune() == 'a':
 				a.loadBlock(panel)
 				return nil
@@ -70,10 +74,27 @@ func (a *App) openView(view *schema.ViewSpec) {
 			}
 			return ev
 		})
-		if !panel.b.Readonly && panel.b.Type != "form" {
+		// Enter edits the selected record, except on the comments pane (Enter
+		// there adds a comment) and read-only or form blocks.
+		if !panel.b.Readonly && panel.b.Type != "form" && panel.b.Type != "comments" {
 			panel.tbl.SetSelectedFunc(func(row, _ int) {
 				if r := panel.rowAt(row); r != nil {
 					a.editFormThen(panel.b.Table, r, panel.tbl, func() { a.loadBlock(panel) })
+				}
+			})
+		}
+		// A list block feeds any comments panes over the same table: when its
+		// selected row changes, reload their threads for that row.
+		if detail := view.CommentsLeavesFor(i); len(detail) > 0 {
+			src := panel
+			panel.tbl.SetSelectionChangedFunc(func(row, _ int) {
+				id := ""
+				if r := src.rowAt(row); r != nil {
+					id = r["id"]
+				}
+				for _, j := range detail {
+					panels[j].parentID = id
+					a.loadBlock(panels[j])
 				}
 			})
 		}
@@ -182,6 +203,26 @@ func (a *App) loadBlock(panel *blockPanel) {
 	panel.tbl.Clear()
 	panel.rows, panel.tree = nil, nil
 	switch panel.b.Type {
+	case "comments":
+		if panel.parentID == "" {
+			panel.tbl.SetCell(0, 0, tview.NewTableCell("(select a row)").SetSelectable(false))
+			return
+		}
+		comments, err := a.api.CommentsFor(panel.b.Table, panel.parentID)
+		if err != nil {
+			a.setStatus("error: " + err.Error())
+			return
+		}
+		panel.tbl.SetCell(0, 0, tview.NewTableCell("when").
+			SetSelectable(false).SetAttributes(tcell.AttrBold))
+		panel.tbl.SetCell(0, 1, tview.NewTableCell("comment").
+			SetSelectable(false).SetAttributes(tcell.AttrBold))
+		for r, comment := range comments {
+			panel.tbl.SetCell(r+1, 0, tview.NewTableCell(shortWhen(comment["date_created"])))
+			panel.tbl.SetCell(r+1, 1, tview.NewTableCell(comment["comment"]))
+		}
+		a.setStatus(fmt.Sprintf("comments: %d | enter=add %s", len(comments), viewHint))
+		return
 	case "form":
 		// One-record panel; block linking is future work, show the first row.
 		rows, err := a.cat.LiveRows(a.api, panel.b.Table)
@@ -241,6 +282,50 @@ func (a *App) blockHeader(panel *blockPanel, cols []string, rowCount int) {
 		panel.tbl.SetCell(0, c, tview.NewTableCell(name).
 			SetSelectable(false).SetAttributes(tcell.AttrBold))
 	}
+}
+
+// addCommentForm adds a comment to the row the pane is currently following.
+func (a *App) addCommentForm(panel *blockPanel) {
+	if panel.parentID == "" {
+		a.setStatus("select a row first")
+		return
+	}
+	form := tview.NewForm()
+	form.AddInputField("comment", "", 0, nil, nil)
+	close := func() {
+		a.pages.RemovePage("addcomment")
+		a.app.SetFocus(panel.tbl)
+	}
+	form.AddButton("Add", func() {
+		text := form.GetFormItemByLabel("comment").(*tview.InputField).GetText()
+		if text == "" {
+			close()
+			return
+		}
+		if _, err := a.api.CommentAdd(panel.b.Table, panel.parentID, text); err != nil {
+			a.setStatus("error: " + err.Error())
+			return
+		}
+		close()
+		a.loadBlock(panel)
+	})
+	form.AddButton("Cancel", close)
+	form.SetCancelFunc(close)
+	form.SetBorder(true).SetTitle(" new comment ")
+	a.pages.AddPage("addcomment", modal(form, 60, 6), true, true)
+	a.app.SetFocus(form)
+}
+
+// shortWhen trims a system timestamp to the minute for the comments pane:
+// "2026-07-17T18:56:58.357Z" -> "2026-07-17 18:56".
+func shortWhen(ts string) string {
+	if date, rest, ok := strings.Cut(ts, "T"); ok {
+		if len(rest) >= 5 {
+			return date + " " + rest[:5]
+		}
+		return date
+	}
+	return ts
 }
 
 func cellValue(row map[string]string, col string) string {

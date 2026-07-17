@@ -106,8 +106,12 @@ In each section, items are listed approximately from newest to oldest.
 
 #### Done - New features and enhancements
 
+- ✅ Comments pane in views: a `type: comments` layout block surfaces a table's built-in 1:m comments component as a detail pane.
+	- Done: the pane follows a sibling list block's selected row, lists that row's thread, and adds to it - in the TUI (Tab to the pane, Enter to add) and the web UI (a per-row comments link loads the thread, an add form posts it). Comments never become a list column, and a comments block over a table without the feature is dropped with a warning.
+	- Done: the demo board view gained the pane and the recorder's TUI beat adds a comment there.
+
 - ✅ Demo gif polish.
-	- Done: theme beat dropped; in its place a real TUI edit - a task is closed in the form, saved, and the board redraws with the change (it also drops out of the CLI open-tasks query later).
+	- Done: theme beat dropped; in its place a real TUI action - a task with an existing comment thread is selected and a comment is added in the board's comments pane (a linked detail the list view never shows).
 	- Done: CLI part opens with a comment line, uses `--db=`/`--table=` explicitly, and the closing line is `# nano-git-db.`
 	- Done: the faux window has square corners and fills the frame except a 4px black outline; terminal scrolls smooth (no jump scroll) with a blinking cursor.
 

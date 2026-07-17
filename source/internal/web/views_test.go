@@ -202,3 +202,125 @@ func TestViewNamedQueries(t *testing.T) {
 		t.Fatalf("startup query should auto-load:\n%s", body)
 	}
 }
+
+const commentsDDL = `
+tables:
+	table: task
+		fields:
+			field: title
+				type: string
+			field: parent_task
+				type: string
+		features:
+			comments: yes
+
+views:
+	view: "board"
+		layout:
+			block: 1
+				table: task
+				type: tree_grid
+				parent_field: parent_task
+			block: 2
+				table: task
+				type: comments
+				location: 1, below, 35%
+	default_view: "board"
+`
+
+func newCommentsServer(t *testing.T) (*server, *crud.API) {
+	t.Helper()
+	sch, err := ddl.Parse([]byte(commentsDDL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(filepath.Join(t.TempDir(), "c.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	if err := st.Build(sch); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := schema.Bootstrap(st, sch); err != nil {
+		t.Fatal(err)
+	}
+	lg, err := txlog.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := crud.New(st, lg)
+	api.UserID = "test"
+	bs, err := schema.Builtins()
+	if err != nil {
+		t.Fatal(err)
+	}
+	api.EnableFeatures(sch, bs)
+	cat, err := schema.NewCatalog(api, sch, bs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := newServer(api, cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s, api
+}
+
+func TestViewCommentsBlock(t *testing.T) {
+	s, api := newCommentsServer(t)
+	h := s.routes()
+	id, err := api.Create("task", map[string]string{"title": "Fix bug"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := api.CommentAdd("task", id, "first note"); err != nil {
+		t.Fatal(err)
+	}
+
+	// the tree_grid rows carry a link that loads a row's thread into the pane
+	rows := get(t, h, "/v/board/b/0/rows").Body.String()
+	if !strings.Contains(rows, "/v/board/b/1/comments?id="+id) {
+		t.Errorf("list row missing its comments link:\n%s", rows)
+	}
+	if !strings.Contains(rows, `hx-target="#vb-1"`) {
+		t.Errorf("comments link should target the pane:\n%s", rows)
+	}
+
+	// the comments block itself is empty until a row is picked
+	pane := get(t, h, "/v/board/b/1/rows").Body.String()
+	if !strings.Contains(pane, "Select a row") {
+		t.Errorf("empty comments pane should prompt for a selection:\n%s", pane)
+	}
+
+	// loading a row's thread shows its comments and an add form
+	thread := get(t, h, "/v/board/b/1/comments?id="+id).Body.String()
+	if !strings.Contains(thread, "first note") {
+		t.Errorf("thread missing the seeded comment:\n%s", thread)
+	}
+	if !strings.Contains(thread, `hx-post="/v/board/b/1/comments?id=`+id+`"`) {
+		t.Errorf("thread missing the add form:\n%s", thread)
+	}
+
+	// posting appends and the fragment comes back with the new comment
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/v/board/b/1/comments?id="+id,
+		strings.NewReader("comment=second+note"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("post comment = %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "second note") {
+		t.Errorf("posted comment not shown back:\n%s", rec.Body.String())
+	}
+	comments, _ := api.CommentsFor("task", id)
+	if len(comments) != 2 {
+		t.Errorf("want 2 comments after add, got %d", len(comments))
+	}
+
+	// a bad block index / non-comments block is a 404
+	if rec := get(t, h, "/v/board/b/0/comments?id="+id); rec.Code != http.StatusNotFound {
+		t.Errorf("comments on a non-comments block = %d, want 404", rec.Code)
+	}
+}
