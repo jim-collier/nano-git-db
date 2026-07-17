@@ -44,11 +44,12 @@ REPO    = ME_DIR.parents[2]                       # cicd/utility/demo-video -> g
 PRIVATE = REPO.parent / "private" / "demo-video"  # ../private symlink -> synced tree
 DEMO_DB = ME_DIR / "demo-db.bash"
 
-BORDER   = 4                                      # thin frame around the window
-WM_THEME = "Greybird-dark"                         # plain, unobtrusive dark titlebar
+BORDER   = 4                                      # black outline around the window
+WM_THEME = "Demo-square"                           # squared Greybird-dark copy (prep_home)
 FRAME_L, FRAME_R, FRAME_T, FRAME_B = 1, 1, 26, 1  # xfwm4 decoration extents (measured)
 
 # the faux terminal look
+ROOT_HEX = "#000000"       # the 4px outline around the frame is pure black
 BG_HEX   = "#23262b"       # dark gray (not black)
 FG_HEX   = "#b8f2c4"       # bright pale green
 CUR_HEX  = "#d7ffe4"       # a hair brighter for the cursor
@@ -117,16 +118,19 @@ class Rec:
 			RPD_HEADLESS_SIZE=f"{self.size[0]}x{self.size[1]}x24")
 		subprocess.run([gh, "stop"], env=e, capture_output=True)
 		run([gh, "start"], env=e)
-		# our own xfwm4 (no compositor) draws a plain dark square-cornered frame -
-		# that decoration IS the "fake window" chrome
+		# our own xfwm4 (no compositor) draws a plain dark frame - that decoration
+		# IS the "fake window" chrome. HOME points at the fake home so it finds the
+		# squared theme copy prep_home wrote to ~/.themes.
+		wmEnv = self.env()
+		wmEnv["HOME"] = str(self.home)
 		self.wm = subprocess.Popen(["dbus-run-session", "--", "sh", "-c",
 			f'xfconf-query -c xfwm4 -p /general/theme --create -t string -s "{WM_THEME}"; '
 			'xfconf-query -c xfwm4 -p /general/title_font --create -t string -s "Sans Bold 9"; '
 			'xfconf-query -c xfwm4 -p /general/button_layout --create -t string -s "|HMC"; '
 			"exec xfwm4 --compositor=off --vblank=off"],
-			env=self.env(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+			env=wmEnv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 		time.sleep(2.0)
-		subprocess.run(["xsetroot", "-solid", BG_HEX], env=self.env(), check=False)
+		subprocess.run(["xsetroot", "-solid", ROOT_HEX], env=self.env(), check=False)
 
 	def stop_display(self):
 		if getattr(self, "wm", None):
@@ -150,8 +154,8 @@ class Rec:
 
 	def fit_geometry(self, font_pt):
 		# launch a probe xterm to read the real cell size at this font, then size
-		# the terminal so its decorated frame nearly fills the screen (leftover
-		# blends into the dark-gray root)
+		# the terminal to the most whole cells that fit; launch_term stretches the
+		# client to exact pixels after, so the frame fills all but the 4px outline
 		probe = subprocess.Popen(["xterm", "-fa", "Monaspace Argon SemiBold",
 			"-fs", str(font_pt), "-geometry", "80x24", "-e", "sleep", "30"],
 			env=self.env(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -206,7 +210,7 @@ class Rec:
 		subprocess.run(["xsetroot", "-solid", "white"], env=self.env(), check=False)
 		self.flash_e = time.time()
 		time.sleep(0.25)
-		subprocess.run(["xsetroot", "-solid", BG_HEX], env=self.env(), check=False)
+		subprocess.run(["xsetroot", "-solid", ROOT_HEX], env=self.env(), check=False)
 		time.sleep(0.4)
 
 	def stop_capture(self):
@@ -240,7 +244,7 @@ class Rec:
 		self.app = subprocess.Popen(["xterm",
 			"-fa", "Monaspace Argon SemiBold", "-fs", str(font_pt),
 			"-geometry", f"{cols}x{rows}+{BORDER}+{BORDER}",
-			"-b", "0", "-bw", "0", "+sb", "-bg", BG_HEX, "-fg", FG_HEX,
+			"-b", "0", "-bw", "0", "+sb", "+j", "-bc", "-bg", BG_HEX, "-fg", FG_HEX,
 			"-cr", CUR_HEX, "-title", "ngdb",
 			"-xrm", "XTerm.vt100.allowTitleOps: false",
 			"-e", "/bin/bash", "--noprofile", "--norc", "-i"],
@@ -248,6 +252,11 @@ class Rec:
 			stdout=open(self.work / "xterm.log", "w"), stderr=subprocess.STDOUT)
 		self.win = self._wait_win()
 		self.xdo("windowmove", self.win, str(BORDER), str(BORDER))
+		# stretch the client to exact pixels so the decorated frame fills the screen
+		# minus the outline; the sub-cell slack just paints as terminal background
+		inner_w = self.size[0] - 2 * BORDER - FRAME_L - FRAME_R
+		inner_h = self.size[1] - 2 * BORDER - FRAME_T - FRAME_B
+		self.xdo("windowsize", self.win, str(inner_w), str(inner_h))
 		time.sleep(0.5)
 		self.xdo("windowactivate", self.win)
 		self.mouse_park()
@@ -386,6 +395,17 @@ def prep_home(rec, rng):
 		'done\n'
 		'exec "$real" "$@"\n')
 	wrap.chmod(0o755)
+	# a squared copy of Greybird-dark: the stock corner pixmaps round off through
+	# transparency, so fill it with the border color and the frame goes square.
+	# Lands in the fake home's ~/.themes, which the wm is pointed at.
+	src = Path("/usr/share/themes/Greybird-dark/xfwm4")
+	dst = home / ".themes" / WM_THEME / "xfwm4"
+	shutil.copytree(src, dst, dirs_exist_ok=True)
+	for corner in ("top-left", "top-right", "bottom-left", "bottom-right"):
+		for state in ("active", "inactive"):
+			xpm = dst / f"{corner}-{state}.xpm"
+			if xpm.exists():
+				xpm.write_text(xpm.read_text().replace("c None", "c #1D1F1F"))
 	# pick this recording's anonymous identity + two distinct name tones
 	uc, hc = rng.sample(NAME_TONES, 2)
 	rec.rng_user = dict(user=rng.choice(USERS), host=rng.choice(HOSTS), uc=uc, hc=hc)
@@ -416,24 +436,28 @@ DB = "issues"
 QUERY_OPEN = "select assignee, status, title from task where status = 'open'"
 
 def seg_tui(r, t):
-	# launch straight into the tree_grid board, walk it, open a row, cycle a theme
+	# launch straight into the tree_grid board, walk it, then edit a task for real:
+	# close it out in the form and Save, and the board redraws with the change
 	t.cmd(f"ngdb --tui {DB}", settle=2.2)
 	t.key("a"); time.sleep(1.8)              # load the board block
 	t.keys("Down", 4, hz=3.4); time.sleep(0.6)
 	t.keys("Up", 2, hz=3.0); time.sleep(0.6)
-	t.key("Return"); time.sleep(2.0)         # open the edit form for a task
-	t.key("Escape"); time.sleep(0.9)
-	t.key("shift+t"); time.sleep(1.5)        # theme picker
-	t.keys("Down", 1, hz=2.6); time.sleep(0.6)  # standard dark theme (not high-contrast)
-	t.key("Return"); time.sleep(1.6)         # apply a theme
+	t.key("Return"); time.sleep(2.0)         # open the edit form for the task
+	t.key("Tab"); time.sleep(0.5)            # title -> status
+	t.keys("BackSpace", 4, hz=5.0)           # clear "open"
+	t.type("closed"); time.sleep(0.5)
+	t.keys("Tab", 5, hz=4.0)                 # remaining fields, onto Save itself
+	t.key("Return"); time.sleep(2.2)         # save; the board reloads updated
 	t.key("q"); time.sleep(1.0)              # back out of the TUI
 
 def seg_cli(r, t):
 	# the same data from the shell; a write shows up on the next read
-	t.cmd(f'ngdb query {DB} "{QUERY_OPEN}"', settle=2.4)
-	t.cmd(f'ngdb create {DB} task title="Add dark mode" '
+	t.cmd("# The CLI also supports full CRUD and query operations ...",
+		settle=0.6, typos=0.0)
+	t.cmd(f'ngdb query --db={DB} "{QUERY_OPEN}"', settle=2.4)
+	t.cmd(f'ngdb create --db={DB} --table=task title="Add dark mode" '
 		'status=open priority=high assignee=demo', settle=2.0)
-	t.cmd(f'ngdb query {DB} "{QUERY_OPEN}"', settle=2.4)
+	t.cmd(f'ngdb query --db={DB} "{QUERY_OPEN}"', settle=2.4)
 	# the payoff: the whole database is this folder - schema, view, append-only log
 	t.cmd("ls -1", settle=2.6)
 
@@ -443,8 +467,7 @@ def seg_outro(r, t):
 	time.sleep(0.3)
 	r.xdo("key", "--clearmodifiers", "Return")   # fresh prompt picks up the gray flag
 	time.sleep(0.6)
-	t.cmd("# Your database is a git repo.  github.com/jim-collier/nano-git-db",
-		settle=0.4, typos=0.0)
+	t.cmd("# nano-git-db.", settle=0.4, typos=0.0)
 	time.sleep(2.4)
 
 SCRIPT = [
@@ -601,3 +624,7 @@ if __name__ == "__main__":
 ##		- 20260715 JC: Created. Adapted from the silkterm demo recorder, minus
 ##		  GPU/audio: xterm faux window, TUI-then-CLI script, hard black loop
 ##		  seam, mp4 (private) + gif (private + assets/demo.gif).
+##		- 20260717 JC: Square full-bleed frame on a black 4px outline (squared
+##		  theme copy + pixel-exact resize), smooth scroll + blinking cursor,
+##		  TUI edit-and-save beat replaces the theme beat, CLI uses --db/--table
+##		  with a lead-in comment, shorter outro line.

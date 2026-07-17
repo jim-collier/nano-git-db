@@ -19,3 +19,4 @@
 # let a stray copy land in git.
 donation_ed25519
 donation_keys/
+__pycache__/

@@ -54,15 +54,6 @@ In each section, items are listed approximately from newest to oldest.
 
 ### New features and enhancements
 
-- 🔘 Demo gif:
-	- One more TUI CRUD example.
-	- For CLI CRUD:
-		- Smooth output scrolling, smooth cursor blink, and smooth cursor movement.
-		- Before starting CLI examples, start with a comment line: "# The CLI also supports full CRUD and query operations ..."
-		- Always specify db with `--db=` rather than by position, and table with `--table=`.
-		- Change last line to: # nano-git-db.
-	- Faux terminal window decorations should have square corners, and take up the entire view except for a 4px black outline.
-
 - 🔘 Use sister project 'SHCL' as the engine for config and DDL files.
 
 - 🛠️ Optional encrypted data in the transaction log. The local SQLite copy is always decrypted.
@@ -114,6 +105,11 @@ In each section, items are listed approximately from newest to oldest.
 #### Done - Bugs
 
 #### Done - New features and enhancements
+
+- ✅ Demo gif polish.
+	- Done: theme beat dropped; in its place a real TUI edit - a task is closed in the form, saved, and the board redraws with the change (it also drops out of the CLI open-tasks query later).
+	- Done: CLI part opens with a comment line, uses `--db=`/`--table=` explicitly, and the closing line is `# nano-git-db.`
+	- Done: the faux window has square corners and fills the frame except a 4px black outline; terminal scrolls smooth (no jump scroll) with a blinking cursor.
 
 - ✅ Enterprise license validation. Phones home to confirm an active subscription and allows a set number of copies at once. Does not fail if it cannot reach the server for a while, and does not bind to specific hardware.
 	- Note: scheme decided in the enterprise repo; implementation is a later phase.
