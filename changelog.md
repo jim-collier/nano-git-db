@@ -2,6 +2,16 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v1.0.0-alpha.2
+
+### Added
+
+- Comment panes in views: a comment list that follows the selected row, in both the terminal and web UIs.
+
+### Notes
+
+- Pre-release tags (alpha, beta, rc) are now flagged as pre-releases automatically, and the release badge reflects it.
+
 ## v1.0.0-alpha.1
 
 First public alpha. The pre-1.0 feature set is complete.

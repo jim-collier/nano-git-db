@@ -232,3 +232,114 @@ func TestTreeRows(t *testing.T) {
 		t.Error("bad parent field should error")
 	}
 }
+
+// A comments-enabled table with a tree_grid list + a comments detail pane, plus
+// a comments block over a table that never opted in (must be dropped).
+const commentsViewDDL = `
+tables:
+	table: task
+		fields:
+			field: title
+				type: string
+			field: parent_task
+				type: string
+		features:
+			comments: yes
+	table: plain
+		fields:
+			field: label
+				type: string
+
+views:
+	view: "board"
+		layout:
+			block: 1
+				table: task
+				type: tree_grid
+				parent_field: parent_task
+			block: 2
+				table: task
+				type: comments
+				location: 1, below, 35%
+	view: "no-feature"
+		layout:
+			block: 1
+				table: plain
+				type: grid
+			block: 2
+				table: plain
+				type: comments
+`
+
+func catalogFrom(t *testing.T, src string) *Catalog {
+	t.Helper()
+	sch, err := ddl.Parse([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(filepath.Join(t.TempDir(), "c.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	if err := st.Build(sch); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Bootstrap(st, sch); err != nil {
+		t.Fatal(err)
+	}
+	lg, err := txlog.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := crud.New(st, lg)
+	api.UserID = "test"
+	bs, err := Builtins()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := NewCatalog(api, sch, bs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cat
+}
+
+func TestResolveCommentsBlock(t *testing.T) {
+	cat := catalogFrom(t, commentsViewDDL)
+
+	board := cat.View("board")
+	if board == nil {
+		t.Fatal("board view not resolved")
+	}
+	if got := len(board.Leaves); got != 2 {
+		t.Fatalf("board: want 2 leaves (list + comments), got %d", got)
+	}
+	if board.Leaves[1].Type != "comments" || board.Leaves[1].Table != "task" {
+		t.Fatalf("leaf 1 should be the comments pane over task: %+v", board.Leaves[1])
+	}
+	if got := board.PrimaryForComments(1); got != 0 {
+		t.Errorf("comments pane should follow leaf 0, got %d", got)
+	}
+	if got := board.CommentsLeavesFor(0); len(got) != 1 || got[0] != 1 {
+		t.Errorf("list leaf 0 should feed comments leaf 1, got %v", got)
+	}
+	// stacked below with a 35% share
+	if board.Root.Dir != "row" {
+		t.Errorf("root should stack (below hint), got %q", board.Root.Dir)
+	}
+
+	// a comments block over a table with no comments feature is dropped, leaving
+	// just the grid; the drop is warned.
+	nf := cat.View("no-feature")
+	if nf == nil {
+		t.Fatal("no-feature view should survive on its grid alone")
+	}
+	if len(nf.Leaves) != 1 || nf.Leaves[0].Type != "grid" {
+		t.Fatalf("no-feature: comments block should be dropped, leaving 1 grid leaf, got %+v", nf.Leaves)
+	}
+	warns := strings.Join(cat.Warnings, "\n")
+	if !strings.Contains(warns, "no comments feature") {
+		t.Errorf("expected a dropped-comments-block warning:\n%s", warns)
+	}
+}

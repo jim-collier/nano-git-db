@@ -118,9 +118,20 @@ func (s *server) viewBlockRows(w http.ResponseWriter, r *http.Request) {
 	block := spec.Leaves[i]
 	data := map[string]any{
 		"Type": block.Type, "Table": block.Table, "Readonly": block.Readonly,
-		"Cols": s.cat.ColumnsFor(block.Table),
+		"Cols": s.cat.ColumnsFor(block.Table), "View": spec.Name, "CommentsTarget": -1,
+	}
+	// A row of a list block that feeds a comments pane gets a link that loads
+	// that row's thread into the pane.
+	if leaves := spec.CommentsLeavesFor(i); len(leaves) > 0 {
+		data["CommentsTarget"] = leaves[0]
 	}
 	switch block.Type {
+	case "comments":
+		// Empty until a row is picked from its list block; the link carries the id.
+		s.render(w, "vcomments.html", map[string]any{
+			"View": spec.Name, "Index": i, "Table": block.Table, "Selected": false,
+		})
+		return
 	case "form":
 		// One-record panel; block linking is future work, show the first row.
 		rows, err := s.cat.LiveRows(s.api, block.Table)
@@ -158,4 +169,46 @@ func (s *server) viewBlockRows(w http.ResponseWriter, r *http.Request) {
 		data["Rows"] = tree
 	}
 	s.render(w, "vrows.html", data)
+}
+
+// viewBlockComments renders (GET) or appends-then-renders (POST) the thread of
+// one row in a comments pane. The row id rides the query string, so the pane
+// follows whatever the list block last selected.
+func (s *server) viewBlockComments(w http.ResponseWriter, r *http.Request) {
+	spec := s.view(w, r)
+	if spec == nil {
+		return
+	}
+	i, err := strconv.Atoi(r.PathValue("i"))
+	if err != nil || i < 0 || i >= len(spec.Leaves) || spec.Leaves[i].Type != "comments" {
+		http.Error(w, "no such comments block", http.StatusNotFound)
+		return
+	}
+	block := spec.Leaves[i]
+	id := r.URL.Query().Get("id")
+	if r.Method == http.MethodPost {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if text := r.PostForm.Get("comment"); text != "" && id != "" {
+			if _, err := s.api.CommentAdd(block.Table, id, text); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+	data := map[string]any{
+		"View": spec.Name, "Index": i, "Table": block.Table,
+		"ID": id, "Selected": id != "",
+	}
+	if id != "" {
+		comments, err := s.api.CommentsFor(block.Table, id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		data["Comments"] = comments
+	}
+	s.render(w, "vcomments.html", data)
 }

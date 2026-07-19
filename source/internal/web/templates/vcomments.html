@@ -1,0 +1,12 @@
+{{if .Selected}}
+<table>
+	<tr><th>when</th><th>comment</th></tr>
+	{{range .Comments}}<tr><td>{{index . "date_created"}}</td><td>{{index . "comment"}}</td></tr>{{end}}
+</table>
+<form hx-post="/v/{{.View}}/b/{{.Index}}/comments?id={{.ID | urlquery}}" hx-target="#vb-{{.Index}}">
+	<input name="comment" placeholder="add a comment">
+	<button type="submit">Add</button>
+</form>
+{{else}}
+<p class="hint">Select a row to see its comments.</p>
+{{end}}

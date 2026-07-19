@@ -222,3 +222,105 @@ func TestStartupQueryAndPicker(t *testing.T) {
 		t.Fatal("q did not quit the app")
 	}
 }
+
+const boardDDL = `
+tables:
+	table: task
+		fields:
+			field: title
+				type: string
+			field: parent_task
+				type: string
+		features:
+			comments: yes
+
+views:
+	view: "board"
+		layout:
+			block: 1
+				table: task
+				type: tree_grid
+				parent_field: parent_task
+			block: 2
+				table: task
+				type: comments
+				location: 1, below, 35%
+`
+
+// The comments pane follows the tree_grid selection and can append a comment;
+// none of it shows as a board column.
+func TestCommentsPaneLinksAndAdds(t *testing.T) {
+	api, sch, bs := ddlSetup(t, boardDDL)
+	api.EnableFeatures(sch, bs)
+	id, err := api.Create("task", map[string]string{"title": "Fix login bug"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := api.CommentAdd("task", id, "seeded thread"); err != nil {
+		t.Fatal(err)
+	}
+	a, err := NewApp(api, sch, bs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	screen := tcell.NewSimulationScreen("UTF-8")
+	if err := screen.Init(); err != nil {
+		t.Fatal(err)
+	}
+	screen.SetSize(120, 40)
+	done := make(chan error, 1)
+	go func() { done <- a.RunWith(screen) }()
+
+	waitFor := func(sub string) {
+		t.Helper()
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			if strings.Contains(screenText(screen), sub) {
+				return
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		a.Stop()
+		t.Fatalf("%q never appeared:\n%s", sub, screenText(screen))
+	}
+	typeText := func(s string) {
+		for _, r := range s {
+			screen.InjectKey(tcell.KeyRune, r, tcell.ModNone)
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+
+	waitFor("1: task (tree_grid)")                      // default board auto-opens
+	waitFor("2: task (comments)")                       // the detail pane is present
+	screen.InjectKey(tcell.KeyRune, 'a', tcell.ModNone) // load the tree_grid
+	waitFor("Fix login bug")
+	waitFor("seeded thread") // auto-selected row's thread loaded into the pane
+
+	screen.InjectKey(tcell.KeyTab, 0, tcell.ModNone)   // focus the comments pane
+	screen.InjectKey(tcell.KeyEnter, 0, tcell.ModNone) // open the add form
+	waitFor("new comment")
+	typeText("shipped it")
+	waitFor("shipped it") // text is in the input field
+	screen.InjectKey(tcell.KeyTab, 0, tcell.ModNone)
+	time.Sleep(30 * time.Millisecond)                  // let focus land on Add
+	screen.InjectKey(tcell.KeyEnter, 0, tcell.ModNone) // press Add
+	waitFor("comments: 2")                             // pane reloaded after the append
+
+	comments, _ := api.CommentsFor("task", id)
+	if len(comments) != 2 {
+		a.Stop()
+		t.Fatalf("want 2 comments after add, got %d", len(comments))
+	}
+
+	screen.InjectKey(tcell.KeyEscape, 0, tcell.ModNone)
+	screen.InjectKey(tcell.KeyRune, 'q', tcell.ModNone)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		a.Stop()
+		t.Fatal("q did not quit")
+	}
+}

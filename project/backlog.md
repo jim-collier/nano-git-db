@@ -54,6 +54,8 @@ In each section, items are listed approximately from newest to oldest.
 
 ### New features and enhancements
 
+- 🔘 Use sister project 'SHCL' as the engine for config and DDL files.
+
 - 🛠️ Optional encrypted data in the transaction log. The local SQLite copy is always decrypted.
 	- Reason: keep the log unreadable to the git host, or to anyone who gets the repo.
 	- Note: some columns stay clear so git can still merge and replay (table and field names, row id, user, host, counts). Only the field values are private.
@@ -104,6 +106,15 @@ In each section, items are listed approximately from newest to oldest.
 
 #### Done - New features and enhancements
 
+- ✅ Comments pane in views: a `type: comments` layout block surfaces a table's built-in 1:m comments component as a detail pane.
+	- Done: the pane follows a sibling list block's selected row, lists that row's thread, and adds to it - in the TUI (Tab to the pane, Enter to add) and the web UI (a per-row comments link loads the thread, an add form posts it). Comments never become a list column, and a comments block over a table without the feature is dropped with a warning.
+	- Done: the demo board view gained the pane and the recorder's TUI beat adds a comment there.
+
+- ✅ Demo gif polish.
+	- Done: theme beat dropped; in its place a real TUI action - a task with an existing comment thread is selected and a comment is added in the board's comments pane (a linked detail the list view never shows).
+	- Done: CLI part opens with a comment line, uses `--db=`/`--table=` explicitly, and the closing line is `# nano-git-db.`
+	- Done: the faux window has square corners and fills the frame except a 4px black outline; terminal scrolls smooth (no jump scroll) with a blinking cursor.
+
 - ✅ Enterprise license validation. Phones home to confirm an active subscription and allows a set number of copies at once. Does not fail if it cannot reach the server for a while, and does not bind to specific hardware.
 	- Note: scheme decided in the enterprise repo; implementation is a later phase.
 
@@ -123,7 +134,7 @@ In each section, items are listed approximately from newest to oldest.
 	- Done: goreleaser builds, archives, and checksums the release for the floss and vendor repos. The local cross-compile uses the same config.
 	- Done: linter and tool versions pinned in one place. A dependabot config brings dependency and toolchain bumps as grouped pull requests.
 	- Done: README badges for CI status, latest release, and Go version.
-	- Note: the first live release fires on the next `dev` -> `main` merge (cuts v1.0.0-alpha.1).
+	- Done: first live release cut - v1.0.0-alpha.1 published (archives, .deb/.rpm, checksums, and Windows installers across linux/macOS/windows/freebsd on amd64+arm64).
 
 - ✅ Donations model.
 	- Done: a "Support nano-git-db" entry in Help/About and `--donate` shows one blurb and one link (DONATE.md). The CLI prints it, the TUI shows a dialog, and the web UI shows a Support page. Open-source build only.
