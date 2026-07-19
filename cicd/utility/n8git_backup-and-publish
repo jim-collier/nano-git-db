@@ -151,7 +151,11 @@ fMain(){
 		git config user.email
 		fEcho_Clean
 		fEcho_Clean "SSH key being used"
-		ssh -Tv git@github.com 2>&1 | grep -iE "offering|successfully authenticated" | sed 's/debug1: //' || true
+		## Test the repo's actual remote host, not a hardcoded one, so the
+		## per-repo ssh alias/key is exercised (a generic github.com falls
+		## back to default key resolution and can report the wrong account).
+		local sshHost; sshHost="$(git remote get-url origin 2>/dev/null | sed -E 's|^[a-z]+://||; s|.*@([^:/]+)[:/].*|\1|')"
+		ssh -Tv git@${sshHost:-github.com} 2>&1 | grep -iE "offering|successfully authenticated" | sed 's/debug1: //' || true
 		fIntroPromptToContinue  ""
 		fEcho_Clean
 	fi
