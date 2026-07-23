@@ -154,8 +154,11 @@ fMain(){
 		## Test the repo's actual remote host, not a hardcoded one, so the
 		## per-repo ssh alias/key is exercised (a generic github.com falls
 		## back to default key resolution and can report the wrong account).
-		local sshHost; sshHost="$(git remote get-url origin 2>/dev/null | sed -E 's|^[a-z]+://||; s|.*@([^:/]+)[:/].*|\1|')"
-		ssh -Tv git@${sshHost:-github.com} 2>&1 | grep -iE "offering|successfully authenticated" | sed 's/debug1: //' || true
+		## Handle every remote form: ssh:// scheme, scp-style git@host:path,
+		## and a bare alias:path with no user@ (the ssh-config Host supplies
+		## it) - the old '.*@' pattern silently failed on that last one.
+		local sshHost; sshHost="$(git remote get-url origin 2>/dev/null | sed -E 's|^[a-z][a-z0-9+.-]*://||; s|^[^@/]*@||; s|[:/].*$||')"
+		ssh -nTv git@${sshHost:-github.com} 2>&1 | grep -iE "offering|successfully authenticated" | sed 's/debug1: //' || true  ## -n: don't read stdin, else it eats the next prompt's input
 		fIntroPromptToContinue  ""
 		fEcho_Clean
 	fi
@@ -393,3 +396,4 @@ fMain  "${@}"
 ##			- Dropped the unused fParseArgs template block.
 ##		- 20260704 JC: Added --no-prompt/--yes/-y (skip the confirm y/n, keep the review display) for callers that already gated.
 ##		- 20260716 JC: Pull is --ff-only (was --no-ff) - never auto-merge on publish; diverged branches stop for manual reconcile.
+##		- 20260719 JC: SSH check reads the host from any remote form, including a bare ssh-config alias with no user@; -n so it can't eat the next prompt's input.
