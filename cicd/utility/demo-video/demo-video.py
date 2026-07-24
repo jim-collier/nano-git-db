@@ -454,7 +454,7 @@ def seg_cli(r, t):
 	t.cmd("# The CLI also supports full CRUD and query operations ...",
 		settle=0.6, typos=0.0)
 	t.cmd(f'ngdb query --db={DB} "{QUERY_OPEN}"', settle=2.4)
-	t.cmd(f'ngdb create --db={DB} --table=task title="Add dark mode" '
+	t.cmd(f'ngdb create --db={DB} --table=task title="Screen flashing on refresh" '
 		'status=open priority=high assignee=demo', settle=2.0)
 	t.cmd(f'ngdb query --db={DB} "{QUERY_OPEN}"', settle=2.4)
 	# the payoff: the whole database is this folder - schema, view, append-only log
