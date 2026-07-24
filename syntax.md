@@ -93,7 +93,7 @@ Anything else stores as text with a warning, so a typo never breaks the load.
 
 Every table automatically gets these; you do not declare them:
 
-- `id` - the row's primary key, a GUID. Reads render it as hex (that is the form you pass back to `get`/`update`). First column, unique, indexed.
+- `id` - the row's primary key, a GUID. Reads render it as 22 characters of base64url (that is the form you pass back to `get`/`update`); the older 32-character hex form is still accepted as input. First column, unique, indexed.
 - `is_active` - defaults to on.
 - `date_created` - set at insert.
 - `is_deleted` - hidden; set by a soft-delete (`markdelete`), and folded into every unique index so a deleted row does not block re-creating its natural key.

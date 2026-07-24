@@ -95,7 +95,7 @@ $exe create issues issue ref=NGD-5 title="Quarterly backup audit"    status=clos
 
 ### 3. Read it back
 
-> "Fetch one issue. Note the id renders as hex - that's the form you pass back in."
+> "Fetch one issue. Note the id renders as a short base64url string - that's the form you pass back in."
 
 ```bash
 $exe get issues issue "$BUG"

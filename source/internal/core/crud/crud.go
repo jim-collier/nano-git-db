@@ -16,7 +16,6 @@ package crud
 
 import (
 	"database/sql"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"os/user"
@@ -224,9 +223,9 @@ func (a *API) Delete(table, id string) error {
 // Get returns one row (including system columns) keyed by column name, or
 // ok=false if absent. Soft-deleted rows are still returned - callers filter.
 func (a *API) Get(table, id string) (map[string]string, bool, error) {
-	idBytes, err := hex.DecodeString(id)
+	idBytes, err := txlog.DecodeID(id)
 	if err != nil {
-		return nil, false, fmt.Errorf("crud: bad id %q: %w", id, err)
+		return nil, false, fmt.Errorf("crud: %w", err)
 	}
 	rows, err := a.st.DB().Query(`SELECT * FROM `+quoteIdent(table)+` WHERE "id"=?`, idBytes)
 	if err != nil {
@@ -313,14 +312,20 @@ func (a *API) entry(table, id, field, op, val string) txlog.Entry {
 	}
 }
 
-// newID returns a hex UUID v7: time-ordered, so ids insert near the b-tree tail
-// and equal-date tx_id ties break in issue order rather than randomly.
+// newID returns a UUID v7 in the log's wire form: time-ordered, so ids insert
+// near the b-tree tail. Note the encoding does not sort in time order (base64url
+// is not ASCII-ordered), so the equal-date tx_id tiebreak in txlog.Apply orders
+// deterministically but arbitrarily. That costs nothing: dates are nanosecond
+// and strictly increasing per client, so a tie only arises between two clients
+// writing in the same nanosecond, where issue order is meaningless anyway. What
+// matters is that every client breaks the tie identically, and string compare
+// does.
 func newID() string {
 	u, err := uuid.NewV7()
 	if err != nil { // entropy exhaustion only; random v4 is an acceptable fallback
 		u = uuid.New()
 	}
-	return hex.EncodeToString(u[:])
+	return txlog.EncodeID(u[:])
 }
 
 const tsLayout = "2006-01-02T15:04:05.000000000Z"
@@ -384,7 +389,7 @@ func valToString(col string, v any) string {
 		return ""
 	case []byte:
 		if col == "id" {
-			return hex.EncodeToString(t)
+			return txlog.EncodeID(t)
 		}
 		return string(t)
 	case string:

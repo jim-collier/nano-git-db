@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/csv"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -33,10 +32,10 @@ import (
 // Entry is one transaction-log row. Field is blank for record-level ops
 // (create with no value, mark_delete, delete).
 type Entry struct {
-	TxID     string // per-entry GUID (hex or base64)
+	TxID     string // per-entry GUID; see id.go for the wire form
 	Date     string // GMT, RFC3339
 	Table    string
-	RowID    string // hex GUID of the affected row
+	RowID    string // GUID of the affected row; see id.go for the wire form
 	Field    string
 	Op       string // create, update, mark_delete, delete
 	NewValue string
@@ -393,9 +392,9 @@ func skippable(err error) bool {
 }
 
 func applyOne(tx *sql.Tx, entry Entry) error {
-	id, err := hex.DecodeString(entry.RowID)
+	id, err := DecodeID(entry.RowID)
 	if err != nil {
-		return fmt.Errorf("%w: bad row_id %q: %v", errBadEntry, entry.RowID, err)
+		return fmt.Errorf("%w: %v", errBadEntry, err)
 	}
 	tbl := quoteIdent(entry.Table)
 

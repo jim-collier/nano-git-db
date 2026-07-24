@@ -4,7 +4,6 @@
 package txlog
 
 import (
-	"encoding/hex"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -42,12 +41,13 @@ const uniqueDDL = "tables:\n" +
 // and abort the entire replay; partial indexes must make this a non-event.
 func TestReplaySurvivesRepeatedSoftDelete(t *testing.T) {
 	st := newView(t, uniqueDDL)
+	row1, row2, row3 := testID("01"), testID("02"), testID("03")
 	entries := []Entry{
-		{Date: "1", TxID: "a", Op: "create", Table: "person", RowID: "01", Field: "name", NewValue: "Ann"},
-		{Date: "2", TxID: "b", Op: "mark_delete", Table: "person", RowID: "01"},
-		{Date: "3", TxID: "c", Op: "create", Table: "person", RowID: "02", Field: "name", NewValue: "Ann"},
-		{Date: "4", TxID: "d", Op: "mark_delete", Table: "person", RowID: "02"},
-		{Date: "5", TxID: "e", Op: "create", Table: "person", RowID: "03", Field: "name", NewValue: "Ann"},
+		{Date: "1", TxID: "a", Op: "create", Table: "person", RowID: row1, Field: "name", NewValue: "Ann"},
+		{Date: "2", TxID: "b", Op: "mark_delete", Table: "person", RowID: row1},
+		{Date: "3", TxID: "c", Op: "create", Table: "person", RowID: row2, Field: "name", NewValue: "Ann"},
+		{Date: "4", TxID: "d", Op: "mark_delete", Table: "person", RowID: row2},
+		{Date: "5", TxID: "e", Op: "create", Table: "person", RowID: row3, Field: "name", NewValue: "Ann"},
 	}
 	warns, err := Apply(st, entries)
 	if err != nil {
@@ -70,11 +70,12 @@ func TestReplaySurvivesRepeatedSoftDelete(t *testing.T) {
 // with a warning, never fatal - the log may be newer than the DDL.
 func TestReplaySkipsSchemaDrift(t *testing.T) {
 	st := newView(t, uniqueDDL)
+	row1, row2 := testID("01"), testID("02")
 	entries := []Entry{
-		{Date: "1", TxID: "a", Op: "create", Table: "person", RowID: "01", Field: "name", NewValue: "Ann"},
-		{Date: "2", TxID: "b", Op: "update", Table: "person", RowID: "01", Field: "no_such_field", NewValue: "x"},
-		{Date: "3", TxID: "c", Op: "create", Table: "no_such_table", RowID: "02", Field: "f", NewValue: "y"},
-		{Date: "4", TxID: "d", Op: "update", Table: "person", RowID: "01", Field: "name", NewValue: "Anne"},
+		{Date: "1", TxID: "a", Op: "create", Table: "person", RowID: row1, Field: "name", NewValue: "Ann"},
+		{Date: "2", TxID: "b", Op: "update", Table: "person", RowID: row1, Field: "no_such_field", NewValue: "x"},
+		{Date: "3", TxID: "c", Op: "create", Table: "no_such_table", RowID: row2, Field: "f", NewValue: "y"},
+		{Date: "4", TxID: "d", Op: "update", Table: "person", RowID: row1, Field: "name", NewValue: "Anne"},
 	}
 	warns, err := Apply(st, entries)
 	if err != nil {
@@ -83,7 +84,7 @@ func TestReplaySkipsSchemaDrift(t *testing.T) {
 	if len(warns) != 2 {
 		t.Fatalf("warnings = %v, want 2", warns)
 	}
-	id, _ := hex.DecodeString("01")
+	id, _ := DecodeID(row1)
 	var name string
 	if err := st.DB().QueryRow(`SELECT "name" FROM "person" WHERE "id"=?`, id).Scan(&name); err != nil {
 		t.Fatal(err)
@@ -97,9 +98,10 @@ func TestReplaySkipsSchemaDrift(t *testing.T) {
 // later one is skipped everywhere, not fatal anywhere.
 func TestReplaySkipsUniqueLoser(t *testing.T) {
 	st := newView(t, uniqueDDL)
+	row1, row2 := testID("01"), testID("02")
 	entries := []Entry{
-		{Date: "1", TxID: "a", Op: "create", Table: "person", RowID: "01", Field: "name", NewValue: "Ann"},
-		{Date: "2", TxID: "b", Op: "create", Table: "person", RowID: "02", Field: "name", NewValue: "Ann"},
+		{Date: "1", TxID: "a", Op: "create", Table: "person", RowID: row1, Field: "name", NewValue: "Ann"},
+		{Date: "2", TxID: "b", Op: "create", Table: "person", RowID: row2, Field: "name", NewValue: "Ann"},
 	}
 	warns, err := Apply(st, entries)
 	if err != nil {
@@ -115,11 +117,12 @@ func TestReplaySkipsUniqueLoser(t *testing.T) {
 // drift; they must never abort the whole replay.
 func TestReplaySkipsBadEntries(t *testing.T) {
 	st := newView(t, uniqueDDL)
+	row1 := testID("01")
 	entries := []Entry{
-		{Date: "1", TxID: "a", Op: "create", Table: "person", RowID: "01", Field: "name", NewValue: "Ann"},
-		{Date: "2", TxID: "b", Op: "frobnicate", Table: "person", RowID: "01"},
+		{Date: "1", TxID: "a", Op: "create", Table: "person", RowID: row1, Field: "name", NewValue: "Ann"},
+		{Date: "2", TxID: "b", Op: "frobnicate", Table: "person", RowID: row1},
 		{Date: "3", TxID: "c", Op: "update", Table: "person", RowID: "zz", Field: "name", NewValue: "x"},
-		{Date: "4", TxID: "d", Op: "update", Table: "person", RowID: "01", Field: "name", NewValue: "Anne"},
+		{Date: "4", TxID: "d", Op: "update", Table: "person", RowID: row1, Field: "name", NewValue: "Anne"},
 	}
 	warns, err := Apply(st, entries)
 	if err != nil {
@@ -128,7 +131,7 @@ func TestReplaySkipsBadEntries(t *testing.T) {
 	if len(warns) != 2 {
 		t.Fatalf("warnings = %v, want 2", warns)
 	}
-	id, _ := hex.DecodeString("01")
+	id, _ := DecodeID(row1)
 	var name string
 	if err := st.DB().QueryRow(`SELECT "name" FROM "person" WHERE "id"=?`, id).Scan(&name); err != nil {
 		t.Fatal(err)
@@ -142,11 +145,12 @@ func TestReplaySkipsBadEntries(t *testing.T) {
 // future GC of the delete's own creates) must not resurrect a one-field ghost.
 func TestReplayDeleteWinsOverLaterUpdates(t *testing.T) {
 	st := newView(t, uniqueDDL)
+	row1 := testID("01")
 	entries := []Entry{
-		{Date: "1", TxID: "a", Op: "create", Table: "person", RowID: "01", Field: "name", NewValue: "Ann"},
-		{Date: "2", TxID: "b", Op: "delete", Table: "person", RowID: "01"},
-		{Date: "3", TxID: "c", Op: "update", Table: "person", RowID: "01", Field: "name", NewValue: "Ghost"},
-		{Date: "4", TxID: "d", Op: "mark_delete", Table: "person", RowID: "01"},
+		{Date: "1", TxID: "a", Op: "create", Table: "person", RowID: row1, Field: "name", NewValue: "Ann"},
+		{Date: "2", TxID: "b", Op: "delete", Table: "person", RowID: row1},
+		{Date: "3", TxID: "c", Op: "update", Table: "person", RowID: row1, Field: "name", NewValue: "Ghost"},
+		{Date: "4", TxID: "d", Op: "mark_delete", Table: "person", RowID: row1},
 	}
 	if _, err := Apply(st, entries); err != nil {
 		t.Fatalf("replay failed: %v", err)
@@ -161,7 +165,7 @@ func TestReplayDeleteWinsOverLaterUpdates(t *testing.T) {
 
 	// ...but a later create legitimately reuses the row id.
 	if _, err := Apply(st, append(entries,
-		Entry{Date: "5", TxID: "e", Op: "create", Table: "person", RowID: "01", Field: "name", NewValue: "Reborn"},
+		Entry{Date: "5", TxID: "e", Op: "create", Table: "person", RowID: row1, Field: "name", NewValue: "Reborn"},
 	)); err != nil {
 		t.Fatalf("replay failed: %v", err)
 	}
