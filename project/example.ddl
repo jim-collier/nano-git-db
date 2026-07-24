@@ -34,11 +34,11 @@ database:
 					aliases: field99, "favorite_candy"
 					type:          string  #..........: string|int|float|bool|datetime[_local]|datetime_utc|binary  ## datetime[_local] stores UTC but displays in user's local time.
 					special:       "%|($0|$2|etc) [and other valid currency symbols]"  ## Defaults internal processing (e.g. % <--> float), defaults a UI format for currency unless overridden, etc.
-					isactive:      bool
-					defaultval:    NULL  #............: In addition to a static value, a script function name can be given here, in format (without quotes): "fMyFunction()". Args that will be passed: table_name, field_name.
-					null_ok:       true  #............: True if not specified.
-					empty_ok:      n  #...............: True if not specified.
+					is_active:     bool
+					defaultval:    @null  #...........: Three forms: a static value; a sentinel from the closed set @null|@previous (@previous = value from the previously entered row, this session, interactive front-ends only - programmatic writes never inherit it); or a script function name, in format (without quotes): "fMyFunction()". Args that will be passed: table_name, field_name. A literal value starting with @ gets quoted.
 					validation:  #....................: Not all validations are valid for all data types. Executable spits warnings if so, and ignores what it can. (Or errors if serious enough.)
+						null_ok:       true  #............: True if not specified.
+						empty_ok:      n  #...............: True if not specified.
 						required:  no
 						minlen:
 						maxlen:
@@ -50,21 +50,30 @@ database:
 						before_update:  #.............: Function that, if exists, is sent: table_name, field_name, and a value - to validate and/or change. Return pass|fail boolean to cancel update.
 						after_update:  #..............: Function that, if exists, is sent: table_name, row_id, field_name, read-only value.
 					ui:
-						visible: Y
-						title: ""  #.............: Defaults to name.
+						visible_form: true
+						visible_list: no
+						label: ""  #.............: Defaults to field name.
 						description: ""  #.......: E.g. for flyover text.
 						order: 3.005  #..........: Display and tab order.
 						readonly: n
 						width:  ## Integer, approx number of characters.
 						widget:  ## listbox|editbox|radio|checkbox|image|audio
-						list_type: literal|dynamic|lookup  ## Checkbox can only be "literal", listbox can be any. Lookup requires SQL to return `id, string`.
-						list_source:  ## E.g. "Bob", "Sally" | `SELECT name FROM ...` | `SELECT id, name FROM ...`
 						format:  ## e.g. printf format string. Display-only format after saving.
+						list_type: literal|sql|lookup
+							## Checkbox can only be "literal", listbox can be any.
+						list_source: ## string
+							## list_type:
+								## literal: e.g. "Bob", "Sally"
+								## sql: e.g. `SELECT idx, title FROM ...`, etc.
+								## lookup: an idx from the 'lookups' table; the field stores the picked lookup_values.idx. Empty group = empty picker until populated.
+						lookup_in_lists: symbol  ## symbol|title|both. Default symbol; a value with no symbol falls back to its title. N/A if list_type <> "lookup".
+						lookup_in_forms: both  #.: symbol|title|both. Default both, rendered "<symbol> <title>".
 				field: field_name2
 					type:          bool
 					defaultval:    false
-					null_ok:       no
-					empty_ok:      n
+					validation:
+						null_ok:   no
+						empty_ok:  n
 			code:
 				before_update:  #.............: Function that, if exists, is sent: table_name, and a key:value array of field values [or something], to validate and/or update. Return pass|fail boolean to cancel update.
 				after_update:  #..............: Function that, if exists, is sent: table_name, row_id.
@@ -80,6 +89,7 @@ database:
 				audit_trail: n
 				row_level_access: n
 			## Fields that all tables get, always and immutably:
+			## A DDL field entry naming one of these may carry `ui:` only (presentation merge); `type:`, `validation:`, `defaultval:` on a system field warn and are ignored.
 			## Even tables "Automatic features that any table can opt-in to" get these:
 				## May or may not be visible to UI
 					- `id`: Table primary key and first field. It stores a GUID (either binary, hex, or base64 whichever makes the most sense). If binary, then program user-facing interfaces will need to be given [and able to give] hex or base64 representations). Indexed, unique.
@@ -87,23 +97,6 @@ database:
 					- `date_created`
 				## Hidden from UI
 					- `is_deleted`: This gets set for record deletion, with garbage collection. Gets auto-added to uniques (except `id`) if not already specified.
-
-database:
-	relationships:
-		relationship:  ## auto-named
-			type:  1:m  ## The relationship is managed by a field on the child entity. This basically just provides optional cascading deletes, and isn't necessary to define, if not doing that.
-			parent: table_1
-			child: table_2
-			parent_id_field: my_parent_id  ## Code makes sure this child field is indexed.
-			cascade_delete: y  ## "y" is the main reason to use this feature, otherwise can be redundant.
-
-database/relationships:
-	relationship:  ## auto-named
-		type:  m:m  ## Implies use of the "Many-to-many relationships" table. Very much not redundant with anything two entities can do themselves.
-		parent: table_1
-		child: table_2
-		cascade_delete: n
-		enable_audit_trail: n  ## The audit trail is on the m:m table.
 
 ui:
 	views:
@@ -132,3 +125,119 @@ ui:
 					parent_field: parent_self_id  ## The field in the table that identifies parent from same table.
 					readonly: yes
 	default_view: "people"
+
+## Actual tables created for every project, that allow predefined features to be easily "wired up".
+## Both lookup tables keep the invisible system `id` (row identity in the tx log) and add `idx`: a unique, read-only, auto-assigned (max+1) int - the reference key used by list_source and stored by lookup-backed fields. Meaning-free, so retitling a value never touches data.
+## Values must exist in lookup_values at write time only; replay never re-checks (a value picked while active must still apply after deactivation).
+## Deactivated values (is_active: n) can't be picked for new rows, but existing rows still render their symbol/title.
+## Caveat: two offline clients minting a value concurrently can allocate the same idx; the unique index drops one at replay with a warning. Prefer seeding via the DDL, where idx conflicts surface as ordinary git merge conflicts.
+database:
+	relationships:
+		relationship:  ## auto-named
+			type:  1:m  ## The relationship is managed by a field on the child entity. This basically just provides optional cascading deletes, and isn't necessary to define, if not doing that.
+			parent: table_1
+			child: table_2
+			parent_id_field: my_parent_id  ## Code makes sure this child field is indexed.
+			cascade_delete: y  ## "y" is the main reason to use this feature, otherwise can be redundant.
+database/relationships:
+	relationship:  ## auto-named
+		type:  m:m  ## Implies use of the "Many-to-many relationships" table. Very much not redundant with anything two entities can do themselves.
+		parent: table_1
+		child: table_2
+		cascade_delete: n
+		enable_audit_trail: n  ## The audit trail is on the m:m table.
+database:
+	tables:
+		table: "lookups"
+			## Any field can "opt in" to wire itself up to this.
+			access:
+			fields:
+				field: id
+					ui:
+						visible_form: y
+						visible_list: n
+						readonly:     y
+				field: idx
+					type:          int  ## Unique, auto-assigned max+1. The handle list_source points at.
+					ui:
+						readonly:  y
+				field: title
+					type:          string
+					validation:
+						null_ok:   n
+						empty_ok:  n
+						required: yes
+				field: description
+					type:          string
+					validation:
+						null_ok:   y
+						empty_ok:  y
+						required:  no
+						defaultval: @null
+				field: is_active
+					type:          bool
+					validation:
+						null_ok:   n
+						defaultval: true
+		table: "lookup_values"
+			access:
+			fields:
+				field: id
+					ui:
+						visible_form: y
+						visible_list: n
+						readonly:     y
+				field: idx
+					type:          int  ## Unique, auto-assigned max+1. What a lookup-backed field stores.
+					ui:
+						readonly:  y
+				field: lookups_idx
+					type:          int
+					defaultval:    @previous
+					validation:
+						null_ok:   n
+						empty_ok:  n
+						required: yes
+					ui:
+						label: ""  #.............: Defaults to field name.
+						description: "Lookup group"
+						widget:  listbox
+						list_type: sql
+						list_source: `SELECT idx, title FROM lookups WHERE is_active ORDER BY title`
+				field: title
+					type:          string
+					validation:
+						null_ok:   n
+						empty_ok:  n
+						required: yes
+				field: symbol
+					type:          string  ## E.g. single emoji
+					validation:
+						null_ok:   y
+						empty_ok:  y
+						required:  no
+				field: description
+					type:          string
+					validation:
+						null_ok:   y
+						empty_ok:  y
+						required:  no
+						defaultval: @null
+				field: sort
+					type:          float  ## Picker order within a group; idx never sorts.
+					validation:
+						null_ok:   y
+						empty_ok:  n
+						required:  no
+						defaultval: @null
+				field: is_active
+					type:          bool
+					validation:
+						null_ok:   n
+						defaultval: true
+	seed:  ## Rows inserted log-first at open when their idx is absent; never overwrites - runtime edits to a seeded row win forever after.
+		lookups:
+			row: idx=1, title="Task status"
+		lookup_values:
+			row: idx=1, lookups_idx=1, title="Open",   symbol="🟢", sort=1
+			row: idx=2, lookups_idx=1, title="Closed", symbol="✅", sort=2

@@ -34,6 +34,7 @@
 		- [Always created and used](#always-created-and-used)
 			- [Users](#users)
 			- [Groups](#groups)
+			- [Lookups](#lookups)
 		- [Automatic features that any table can opt-in to](#automatic-features-that-any-table-can-opt-in-to)
 			- [Many-to-many relationships](#many-to-many-relationships)
 			- [Comments](#comments)
@@ -261,6 +262,11 @@ The `--init`, `--config`, and `--encrypt` CLI flags drive the same registry from
 - When a view specifies `startup_named_query`, that named query's dataset loads as soon as the view opens. Only when it is empty or unspecified does the view open with no records shown - then you have to query, e.g. via "All" button, or via predefined query dropdown.
 - The default view (`ui:` -> `default_view`, else the first view defined) opens on startup in both UIs. Its blocks still load empty per the no-records-until-asked rule; a `default_view` naming an unusable view warns and falls back to the first one.
 - View rendering (v1): the DDL's layout blocks render as nested splits in both UIs (TUI flexes, web flexbox). A location hint's direction and percent set each split's axis and share; the relative-to element is ignored for now (blocks place in DDL order). Leaf blocks are `grid`, `tree_grid` (rows ordered depth-first along `parent_field`, indented by depth; orphaned or cyclic parents degrade to extra roots rather than hiding rows), `form` (single-record panel; shows the first record until block linking exists), or `comments` (a detail pane over the table's built-in comments component - it follows a sibling list block's selected row, listing that row's thread with an add affordance, and stays empty until a row is picked). The comments pane surfaces the 1:m `comments` feature a table opted into, without ever adding a column to the list view; a `comments` block over a table that has no comments feature is dropped with a warning. Blocks over unknown tables are dropped with a warning, a bad `tree_grid` degrades to a plain grid, and `readonly` (view-level, overridable per block) removes the edit affordances. Editing from a web view block currently jumps to the table's form; returning into the view is future polish.
+- Field UI metadata (spec settled 2026-07, implementation waits for the shcl syntax migration; current vocabulary in [example.ddl](example.ddl)):
+	- `visible` splits into `visible_form` and `visible_list`. Presentation only, never access control - a hidden field stays fully readable via CLI/query/SQL; the `access:` lists are the only thing that gates data.
+	- `title` becomes `label`; `list_type` values are `literal|sql|lookup` (`sql` replaces `dynamic`); `lookup` wires a field to the built-in lookup tables (see Lookups).
+	- A DDL field entry naming a system field (`id`, `is_active`, `date_created`) merges its `ui:` block onto it instead of being dropped. Presentation-only merge: `type:`, `validation:`, `defaultval:` on a system field warn and are ignored - system fields stay structurally immutable, presentationally customizable.
+	- `defaultval` takes three forms: a static value, a sentinel from a closed set (`@null`, `@previous`), or a script function `"fFunc()"`. The `@` marker was chosen over brackets because `[` `]` are reserved value characters in shcl. `@previous` (value from the previously entered row, this session) applies in interactive front-ends only - programmatic writes never inherit a sticky session value; an omitted field is null or a required-field error.
 
 ### Predefined queries
 
@@ -372,6 +378,18 @@ relationships:
 		cascade_delete: y
 		enable_audit_trail: y
 ~~~
+
+##### Lookups
+
+Two built-in tables, created for every database, give any field a data-driven pick list without a schema change: `lookups` (the groups) and `lookup_values` (the members: title, symbol e.g. a single emoji, description, sort, is_active). Decisions made here:
+
+- Unlike the other built-ins, these are meant to be user-edited in the UI, so front-ends list them like normal tables.
+- Both keep the invisible system `id` (row identity in the tx log, untouched machinery) and add `idx`: a unique, read-only, auto-assigned (max+1) int. `idx` is the reference key - a field's `list_source` names a `lookups.idx`, and the field stores the picked `lookup_values.idx`. We chose a meaning-free int over a name (retitling a value or group never orphans data) and over a UUID (compact and legible in the DDL and log).
+- The DDL can carry seed rows for these tables (`seed:` section). Seeding is idempotent and log-first at open: a seed row inserts only when its idx is absent; runtime edits to a seeded row win over the DDL forever after. Seeding via the DDL is the preferred way to mint values - idx conflicts then surface as ordinary git merge conflicts. Two offline clients minting values at runtime can collide on idx; the unique index drops one at replay with a warning.
+- "Value must exist in lookup_values" is enforced at write time only, never at replay - a value legitimately picked while active must still apply after later deactivation.
+- Deactivated values (`is_active: n`) can't be picked for new rows, but existing rows still render their symbol/title.
+- Display is controlled per field by two enums, `lookup_in_lists` and `lookup_in_forms`, each `symbol|title|both`: lists default to symbol (falling back to title when a value has no symbol), forms default to both, rendered symbol then title. Hiding entirely is the job of the `visible_*` keys, not these.
+- TUI note for implementation: emoji symbols mean double-width and occasionally unrenderable glyphs; the symbol column needs width handling, with title fallback. The web UI has no such problem.
 
 #### Automatic features that any table can opt-in to
 
