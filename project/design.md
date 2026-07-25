@@ -194,16 +194,24 @@ After the program loads with a local view of the SQLite database, it begins in t
 
 Fields:
 
-- tx_id (hex or base64 GUID)
+- tx_id (GUID)
 - date (GMT)
 - table_name
-- row_id  ## hex GUID of the affected row. Added during implementation - field-level ops can't be applied without a row identifier.
+- row_id  ## GUID of the affected row. Added during implementation - field-level ops can't be applied without a row identifier.
 - field_name  ## Can be blank if record-level only
 - operation (create, update, mark_delete, delete)
 - new_value
 - user_id
 - ok_to_garbage_collect
 - host_name  ## Machine that wrote the entry. One user can write from several hosts.
+
+Both ids are a 16-byte UUIDv7 written as 22 characters of unpadded base64url rather than 32 of hex. Two ids ride on every line, so the shorter form trims a useful slice off a file that is read whole on every replay; it buys little in git, where both forms hold the same 128 bits and compress alike. Logs written before the switch carry the 32-character hex form, and both are read - the fixed 16-byte width tells them apart by length alone, so nothing has to be sniffed or migrated. Ids are never re-encoded in place: an encrypted value derives its subkey from the tx_id and row_id strings and authenticates the row id, so rewriting an id from one form to the other would silently strand the ciphertext under it. Append-only makes that a non-issue in normal operation (GC rotation copies lines verbatim), but it rules out any tidy-up pass over historical ids.
+
+Note the encoding does not sort in time order, since base64url is not ASCII-ordered. That costs nothing: replay orders by date first, and dates are nanosecond and strictly increasing per client, so the tx_id tiebreak only arises between two clients writing in the same nanosecond - where issue order is meaningless anyway. What the tiebreak has to be is identical on every client, and a string compare is. The raw bytes still climb, which is what keeps primary-key inserts at the b-tree tail.
+
+A field declared `ref` holds a reference to another row's `id`, and holds it the same way the `id` itself is held - as the raw 16 bytes, not as their text form. So a reference joins directly against the key it points at, and costs 16 bytes rather than 22 or 32. The log still carries the value as ordinary id text, since the log is text; replay converts it on the way into the view, and reads convert it back, so nothing above the storage layer has to think about bytes. A `binary` field is also a blob, which is why the ref columns are tracked from the schema rather than inferred from the SQL type.
+
+The built-in link tables (`many2many`, `comments`, `audit_trail`, `access_rows`) still hold their `parent_id` columns as text. Converting them is worthwhile but is not a type change alone: the feature queries bind those ids as string parameters, and a blob column compared against a string parameter matches nothing and reports no error. That conversion therefore has to move the column and every one of its query sites together.
 
 Reads map columns by the header row's names, not by position, so field order does not affect compatibility. A column can be reordered, added, or dropped and older and newer clients still read each other's logs: an unknown extra column is ignored, and a column a record lacks (e.g. a pre-host_name row, or a narrower legacy header) defaults to empty. A record only needs enough fields to carry the required columns (through `user_id`); anything shorter is treated as torn. Header rows are recognized by carrying the reserved column names rather than by their first cell, so even the header can be reordered. tx_id remains the conventional first column.
 
