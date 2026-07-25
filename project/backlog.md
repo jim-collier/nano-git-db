@@ -80,6 +80,14 @@ In each section, items are listed approximately from newest to oldest.
 
 #### Done - New features and enhancements
 
+- ✅ Shorter row and transaction ids in the log.
+	- Done: ids are written as 22 characters of base64url instead of 32 of hex. Two ride on every line, so the log gets smaller to read and replay; the git repo barely changes, since both forms hold the same bits.
+	- Done: logs written before the switch still replay - both forms are read, told apart by width. Ids are never re-encoded in place: an encrypted value is keyed off the id text, so rewriting one would strand its value.
+
+- ✅ New `ref` field type for a reference to another row.
+	- Done: stored as the same raw bytes as the `id` it points at, so it joins directly against the key and takes 16 bytes rather than 22 or 32. Read and written as the usual id text.
+	- Note: the built-in link tables still hold their `parent_id` as text. Moving them needs their queries moved at the same time, or a reference silently matches nothing.
+
 - ✅ Comments pane in views: a `type: comments` layout block surfaces a table's built-in 1:m comments component as a detail pane.
 	- Done: the pane follows a sibling list block's selected row, lists that row's thread, and adds to it - in the TUI (Tab to the pane, Enter to add) and the web UI (a per-row comments link loads the thread, an add form posts it). Comments never become a list column, and a comments block over a table without the feature is dropped with a warning.
 	- Done: the demo board view gained the pane and the recorder's TUI beat adds a comment there.
