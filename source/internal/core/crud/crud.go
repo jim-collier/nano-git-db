@@ -29,6 +29,7 @@ import (
 
 	"github.com/jim-collier/nano-git-db/enc"
 	"github.com/jim-collier/nano-git-db/internal/core/ddl"
+	"github.com/jim-collier/nano-git-db/internal/core/guid"
 	"github.com/jim-collier/nano-git-db/internal/core/store"
 	"github.com/jim-collier/nano-git-db/internal/core/txlog"
 )
@@ -223,7 +224,7 @@ func (a *API) Delete(table, id string) error {
 // Get returns one row (including system columns) keyed by column name, or
 // ok=false if absent. Soft-deleted rows are still returned - callers filter.
 func (a *API) Get(table, id string) (map[string]string, bool, error) {
-	idBytes, err := txlog.DecodeID(id)
+	idBytes, err := guid.Decode(id)
 	if err != nil {
 		return nil, false, fmt.Errorf("crud: %w", err)
 	}
@@ -325,7 +326,7 @@ func newID() string {
 	if err != nil { // entropy exhaustion only; random v4 is an acceptable fallback
 		u = uuid.New()
 	}
-	return txlog.EncodeID(u[:])
+	return guid.Encode(u[:])
 }
 
 const tsLayout = "2006-01-02T15:04:05.000000000Z"
@@ -390,7 +391,7 @@ func valToString(col string, v any) string {
 	case []byte:
 		// The driver hands back []byte only for a BLOB column - id, a ref, or a
 		// binary field - never for text, so this cannot mangle a string.
-		return txlog.EncodeID(t)
+		return guid.Encode(t)
 	case string:
 		return t
 	case int64:

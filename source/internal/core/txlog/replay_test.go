@@ -85,7 +85,7 @@ func TestReplaySkipsSchemaDrift(t *testing.T) {
 	if len(warns) != 2 {
 		t.Fatalf("warnings = %v, want 2", warns)
 	}
-	id, _ := DecodeID(row1)
+	id, _ := decodeID(row1)
 	var name string
 	if err := st.DB().QueryRow(`SELECT "name" FROM "person" WHERE "id"=?`, id).Scan(&name); err != nil {
 		t.Fatal(err)
@@ -132,7 +132,7 @@ func TestReplaySkipsBadEntries(t *testing.T) {
 	if len(warns) != 2 {
 		t.Fatalf("warnings = %v, want 2", warns)
 	}
-	id, _ := DecodeID(row1)
+	id, _ := decodeID(row1)
 	var name string
 	if err := st.DB().QueryRow(`SELECT "name" FROM "person" WHERE "id"=?`, id).Scan(&name); err != nil {
 		t.Fatal(err)
@@ -198,8 +198,8 @@ func TestApplyStoresRefAsRawBytes(t *testing.T) {
 		t.Fatalf("unexpected warnings: %v", warns)
 	}
 
-	id, _ := DecodeID(row)
-	want, _ := DecodeID(parent)
+	id, _ := decodeID(row)
+	want, _ := decodeID(parent)
 	var got []byte
 	if err := st.DB().QueryRow(`SELECT "parent_task" FROM "task" WHERE "id"=?`, id).Scan(&got); err != nil {
 		t.Fatal(err)

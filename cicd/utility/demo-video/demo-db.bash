@@ -47,7 +47,7 @@ database:
 				field: opened
 					type: datetime_local
 				field: parent_task
-					type: string
+					type: ref
 			features:
 				comments: yes
 				audit_trail: yes

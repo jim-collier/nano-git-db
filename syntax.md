@@ -94,7 +94,7 @@ Anything else stores as text with a warning, so a typo never breaks the load.
 
 Every table automatically gets these; you do not declare them:
 
-- `id` - the row's primary key, a GUID. Reads render it as 22 characters of base64url (that is the form you pass back to `get`/`update`); the older 32-character hex form is still accepted as input. First column, unique, indexed.
+- `id` - the row's primary key, a GUID. Stored as raw bytes; reads render it as 22 characters of base64url (that is the form you pass back to `get`/`update`), and the longer 32-character hex form is also accepted as input. First column, unique, indexed.
 - `is_active` - defaults to on.
 - `date_created` - set at insert.
 - `is_deleted` - hidden; set by a soft-delete (`markdelete`), and folded into every unique index so a deleted row does not block re-creating its natural key.
@@ -302,6 +302,19 @@ query <db> <sql>                       read-only SQL against the view
 ```
 
 The database and table may also be given as flags in any order instead of positionally: `--db=<name>` / `-d <name>` and `--table=<name>` / `-t <name>` (e.g. `ngdb get --db=todo --table=task <id>`).
+
+#### Ids in a hand-written query
+
+Keys and `ref` fields hold raw bytes, so comparing one to an id string finds nothing - and SQL reports that as an empty result, not an error. Two functions cross the line on purpose:
+
+- `id(text)` - the id text as raw bytes, for matching a key or a `ref`. A malformed id raises an error rather than matching nothing, so a typo says so.
+- `idtext(blob)` - the inverse, for displaying or string-matching an id.
+
+```sql
+SELECT idtext(id), title FROM task WHERE parent_task = id('AZeR9kQ_c0-Bq2VvKQpXhw')
+```
+
+Neither is needed to join a `ref` to the key it points at - those are already the same bytes: `... FROM task c JOIN task p ON c.parent_task = p.id`.
 
 Opt-in features (the table must enable them in its DDL `features:` block):
 

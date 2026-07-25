@@ -128,7 +128,7 @@ func TestApplyNullSetsSQLNull(t *testing.T) {
 	if _, err := Apply(st, entries); err != nil {
 		t.Fatal(err)
 	}
-	id, _ := DecodeID(row)
+	id, _ := decodeID(row)
 	var name sql.NullString
 	if err := st.DB().QueryRow(`SELECT "name" FROM "person" WHERE "id"=?`, id).Scan(&name); err != nil {
 		t.Fatal(err)

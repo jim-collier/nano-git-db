@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jim-collier/nano-git-db/internal/core/txlog"
+	"github.com/jim-collier/nano-git-db/internal/core/guid"
 )
 
 // now() must be strictly increasing even under rapid calls or a wall clock
@@ -42,7 +42,7 @@ func TestNowSurvivesClockStepBack(t *testing.T) {
 func TestNewIDIsTimeOrdered(t *testing.T) {
 	decode := func(id string) []byte {
 		t.Helper()
-		raw, err := txlog.DecodeID(id)
+		raw, err := guid.Decode(id)
 		if err != nil {
 			t.Fatalf("newID produced an undecodable id %q: %v", id, err)
 		}

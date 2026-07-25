@@ -59,18 +59,18 @@ tables:
 				type: string
 			field: table_name_2
 				type: string
-			field: parent_id_1  ## row id (hex) in table_name_1
-				type: string
-			field: parent_id_2  ## row id (hex) in table_name_2
-				type: string
+			field: parent_id_1  ## row id in table_name_1
+				type: ref
+			field: parent_id_2  ## row id in table_name_2
+				type: ref
 		uniques:  ## partial (live rows only), so is_deleted needs no folding in
 			table_name_1, table_name_2, parent_id_1, parent_id_2
 	table: comments
 		fields:
 			field: table_name
 				type: string
-			field: parent_id  ## row id (hex) in table_name
-				type: string
+			field: parent_id  ## row id in table_name
+				type: ref
 			field: comment
 				type: string
 		indexes:
@@ -80,8 +80,8 @@ tables:
 		fields:
 			field: table_name
 				type: string
-			field: parent_id  ## row id (hex) in table_name
-				type: string
+			field: parent_id  ## row id in table_name
+				type: ref
 			field: user_id
 				type: string
 			field: date  ## stored GMT, displayed local
@@ -96,8 +96,8 @@ tables:
 		fields:
 			field: table_name
 				type: string
-			field: parent_id  ## row id (hex) in table_name
-				type: string
+			field: parent_id  ## row id in table_name
+				type: ref
 		indexes:
 			table_name, parent_id
 	table: attachments_uri
