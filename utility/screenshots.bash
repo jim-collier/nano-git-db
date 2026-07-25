@@ -14,6 +14,11 @@
 ##		gui-headless.bash uses. All content is fake (demo user, /tmp paths) so no
 ##		real name, path, or data ends up in a committed image.
 
+##	Copyright © 2026 Bubbles (ID: XଌฅრX۳ᛟԃლፀƅꓩหδლც)
+##	Licensed under The MIT License (MIT). Full text at:
+##		https://mit-license.org/
+##	SPDX-License-Identifier: MIT
+
 set -Eeuo pipefail
 
 dirPath_Self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -200,5 +205,5 @@ fMain "$@"
 
 
 ##	Script history:
-##		- 20260704 JC: Created.
-##		- 20260704 JC: Moved to github/utility/; headless helper still in cicd/utility/. Run from cicd under a non-quick build.
+##		- 20260704: Created.
+##		- 20260704: Moved to github/utility/; headless helper still in cicd/utility/. Run from cicd under a non-quick build.

@@ -22,7 +22,7 @@
 ##		are truncated, never wrapped, via a tiny ngdb wrapper on PATH.
 ##	History: at bottom.
 
-##	Copyright © 2026 Jim Collier
+##	Copyright © 2026 Bubbles (ID: XଌฅრX۳ᛟԃლፀƅꓩหδლც)
 ##	Licensed under The MIT License (MIT). Full text at:
 ##		https://mit-license.org/
 ##	SPDX-License-Identifier: MIT
@@ -620,12 +620,12 @@ if __name__ == "__main__":
 
 
 ##	Script history:
-##		- 20260715 JC: Created. Adapted from the silkterm demo recorder, minus
+##		- 20260715: Created. Adapted from the silkterm demo recorder, minus
 ##		  GPU/audio: xterm faux window, TUI-then-CLI script, hard black loop
 ##		  seam, mp4 (private) + gif (private + assets/demo.gif).
-##		- 20260717 JC: Square full-bleed frame on a black 4px outline (squared
+##		- 20260717: Square full-bleed frame on a black 4px outline (squared
 ##		  theme copy + pixel-exact resize), smooth scroll + blinking cursor,
 ##		  TUI edit-and-save beat replaces the theme beat, CLI uses --db/--table
 ##		  with a lead-in comment, shorter outro line.
-##		- 20260717 JC: TUI beat now adds a comment in the board's comments pane
+##		- 20260717: TUI beat now adds a comment in the board's comments pane
 ##		  (a linked 1:m detail) instead of editing status.
