@@ -14,7 +14,7 @@
 ##		  ngdb-bin   : the binary to drive
 ##	History: at bottom.
 
-##	Copyright © 2026 Jim Collier
+##	Copyright © 2026 Bubbles (ID: XଌฅრX۳ᛟԃლፀƅꓩหδლც)
 ##	Licensed under The MIT License (MIT). Full text at:
 ##		https://mit-license.org/
 ##	SPDX-License-Identifier: MIT
@@ -101,4 +101,4 @@ echo "dir=$dir"
 
 
 ##	Script history:
-##		- 20260715 JC: Created; co-located short-path layout for the recorder.
+##		- 20260715: Created; co-located short-path layout for the recorder.
