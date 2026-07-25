@@ -4,6 +4,7 @@
 package txlog
 
 import (
+	"bytes"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -174,5 +175,65 @@ func TestReplayDeleteWinsOverLaterUpdates(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("%d row(s) after re-create, want 1", n)
+	}
+}
+
+// A ref column holds the same raw bytes as a row's own primary key, so a
+// reference joins straight against the id it points at.
+func TestApplyStoresRefAsRawBytes(t *testing.T) {
+	st := newView(t, "tables:\n"+
+		"\ttable: task\n"+
+		"\t\tfields:\n"+
+		"\t\t\tfield: parent_task\n"+
+		"\t\t\t\ttype: ref\n")
+	row, parent := testID("01"), testID("02")
+	warns, err := Apply(st, []Entry{
+		{Date: "1", TxID: "a", Op: "create", Table: "task", RowID: parent},
+		{Date: "2", TxID: "b", Op: "create", Table: "task", RowID: row, Field: "parent_task", NewValue: parent},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warns) != 0 {
+		t.Fatalf("unexpected warnings: %v", warns)
+	}
+
+	id, _ := DecodeID(row)
+	want, _ := DecodeID(parent)
+	var got []byte
+	if err := st.DB().QueryRow(`SELECT "parent_task" FROM "task" WHERE "id"=?`, id).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("ref stored %x, want the parent's raw id %x", got, want)
+	}
+
+	var joined int
+	if err := st.DB().QueryRow(`SELECT COUNT(*) FROM "task" c JOIN "task" p ON c."parent_task"=p."id"`).
+		Scan(&joined); err != nil {
+		t.Fatal(err)
+	}
+	if joined != 1 {
+		t.Fatalf("ref joined %d row(s) against id, want 1", joined)
+	}
+}
+
+// A ref value that is not an id skips with a warning rather than landing a
+// string in a column everything else treats as bytes.
+func TestApplySkipsMalformedRef(t *testing.T) {
+	st := newView(t, "tables:\n"+
+		"\ttable: task\n"+
+		"\t\tfields:\n"+
+		"\t\t\tfield: parent_task\n"+
+		"\t\t\t\ttype: ref\n")
+	warns, err := Apply(st, []Entry{
+		{Date: "1", TxID: "a", Op: "create", Table: "task", RowID: testID("01"),
+			Field: "parent_task", NewValue: "not-an-id"},
+	})
+	if err != nil {
+		t.Fatalf("a bad ref must warn, not abort: %v", err)
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], "parent_task") {
+		t.Fatalf("warnings = %v, want one naming the ref column", warns)
 	}
 }

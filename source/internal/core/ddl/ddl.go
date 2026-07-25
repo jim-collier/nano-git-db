@@ -363,10 +363,11 @@ func parseTable(n *Node, s *Schema) Table {
 }
 
 // fieldTypes are the DDL's data types (design: string|int|float|bool|
-// datetime[_local]|datetime_utc|binary); anything else stores as text.
+// datetime[_local]|datetime_utc|binary|ref); anything else stores as text.
 var fieldTypes = map[string]bool{
 	"": true, "string": true, "int": true, "float": true, "bool": true,
 	"datetime": true, "datetime_local": true, "datetime_utc": true, "binary": true,
+	"ref": true,
 }
 
 func parseField(n *Node, s *Schema) Field {

@@ -388,10 +388,9 @@ func valToString(col string, v any) string {
 	case nil:
 		return ""
 	case []byte:
-		if col == "id" {
-			return txlog.EncodeID(t)
-		}
-		return string(t)
+		// The driver hands back []byte only for a BLOB column - id, a ref, or a
+		// binary field - never for text, so this cannot mangle a string.
+		return txlog.EncodeID(t)
 	case string:
 		return t
 	case int64:

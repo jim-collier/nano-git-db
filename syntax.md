@@ -86,6 +86,7 @@ Additional keys appear in `project/example.ddl` (`ui:`, `validation:`, `special:
 | `datetime_utc` | text | UTC.
 | `datetime` | text | Alias handling for `datetime_local`.
 | `binary` | blob |
+| `ref` | blob | A reference to another row's `id`. Holds the same raw bytes the `id` does, so it joins directly against it; you still read and write it as the usual id text.
 
 Anything else stores as text with a warning, so a typo never breaks the load.
 
