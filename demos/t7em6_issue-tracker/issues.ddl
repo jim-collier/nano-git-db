@@ -22,8 +22,8 @@ database:
 					type: string
 				field: opened
 					type: datetime_local
-				field: parent_issue  ## hex id of a parent issue (epic/subtask), empty = top level
-					type: string
+				field: parent_issue  ## a parent issue (epic/subtask), empty = top level
+					type: ref
 			uniques:
 				ref
 			indexes:

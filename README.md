@@ -178,7 +178,7 @@ database:
 				field: closed
 					type: datetime_local
 				field: parent_task
-					type: string  ## a parent task's id; empty for a top-level task
+					type: ref  ## a parent task's id; empty for a top-level task
 			features:
 				comments: yes    ## each task gets its own list of comments
 

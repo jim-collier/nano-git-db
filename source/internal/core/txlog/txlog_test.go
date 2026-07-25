@@ -241,7 +241,7 @@ func TestApplyReplaysToView(t *testing.T) {
 		t.Fatal(err)
 	}
 	var n int
-	idA, _ := DecodeID(rowA)
+	idA, _ := decodeID(rowA)
 	if err := st.DB().QueryRow(`SELECT COUNT(*) FROM "person" WHERE "id"=?`, idA).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestApplyReplaysToView(t *testing.T) {
 
 func lookup(t *testing.T, st *store.Store, rowID string) (string, int) {
 	t.Helper()
-	id, _ := DecodeID(rowID)
+	id, _ := decodeID(rowID)
 	var name sql.NullString
 	var age sql.NullInt64
 	err := st.DB().QueryRow(`SELECT "name","age" FROM "person" WHERE "id"=?`, id).Scan(&name, &age)
@@ -264,7 +264,7 @@ func lookup(t *testing.T, st *store.Store, rowID string) (string, int) {
 
 func softDeleted(t *testing.T, st *store.Store, rowID string) bool {
 	t.Helper()
-	id, _ := DecodeID(rowID)
+	id, _ := decodeID(rowID)
 	var del int
 	if err := st.DB().QueryRow(`SELECT "is_deleted" FROM "person" WHERE "id"=?`, id).Scan(&del); err != nil {
 		t.Fatal(err)

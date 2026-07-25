@@ -134,8 +134,10 @@ $exe attachments issues issue "$BUG"
 
 > "That table also has an audit trail on. Every change was captured in the same commit as the change - no extra work."
 
+Ids and references are stored as raw bytes, so a hand-written query wraps the text form in `id()`. The inverse is `idtext()`.
+
 ```bash
-$exe query issues "SELECT action, user_id, \"values\" FROM audit_trail WHERE parent_id = '$BUG' ORDER BY date"
+$exe query issues "SELECT action, user_id, \"values\" FROM audit_trail WHERE parent_id = id('$BUG') ORDER BY date"
 ```
 
 ```bash

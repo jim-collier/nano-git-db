@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jim-collier/nano-git-db/internal/core/guid"
 	"github.com/jim-collier/nano-git-db/internal/core/store"
 )
 
@@ -392,7 +393,7 @@ func skippable(err error) bool {
 }
 
 func applyOne(tx *sql.Tx, st *store.Store, entry Entry) error {
-	id, err := DecodeID(entry.RowID)
+	id, err := guid.Decode(entry.RowID)
 	if err != nil {
 		return fmt.Errorf("%w: %v", errBadEntry, err)
 	}
@@ -435,7 +436,7 @@ func setField(tx *sql.Tx, quotedTable string, entry Entry, id []byte, isRef bool
 	case entry.IsNull || entry.Enc:
 		val = nil
 	case isRef && entry.NewValue != "":
-		raw, err := DecodeID(entry.NewValue)
+		raw, err := guid.Decode(entry.NewValue)
 		if err != nil {
 			return fmt.Errorf("%w: %s: %v", errBadEntry, entry.Field, err)
 		}

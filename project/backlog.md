@@ -86,7 +86,11 @@ In each section, items are listed approximately from newest to oldest.
 
 - ✅ New `ref` field type for a reference to another row.
 	- Done: stored as the same raw bytes as the `id` it points at, so it joins directly against the key and takes 16 bytes rather than 22 or 32. Read and written as the usual id text.
-	- Note: the built-in link tables still hold their `parent_id` as text. Moving them needs their queries moved at the same time, or a reference silently matches nothing.
+
+- ✅ Every key and reference in the view is binary; text ids live only in the log.
+	- Done: the built-in link tables (`many2many`, `comments`, `audit_trail`, `access_rows`) hold their `parent_id` columns as references too, moved together with the queries that read them - a blob compared to a string matches nothing and reports no error, so a half-done conversion reads as "no results".
+	- Done: hand-written SQL gets `id()` and `idtext()` to convert between an id's text and stored forms. `id()` rejects a malformed id rather than returning nothing.
+	- Done: the id format moved to its own package, shared by the log and the view instead of owned by either.
 
 - ✅ Comments pane in views: a `type: comments` layout block surfaces a table's built-in 1:m comments component as a detail pane.
 	- Done: the pane follows a sibling list block's selected row, lists that row's thread, and adds to it - in the TUI (Tab to the pane, Enter to add) and the web UI (a per-row comments link loads the thread, an add form posts it). Comments never become a list column, and a comments block over a table without the feature is dropped with a warning.
