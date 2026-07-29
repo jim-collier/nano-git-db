@@ -65,7 +65,7 @@ func Init(args []string) error {
 	}
 
 	fmt.Printf("registered %q\n", name)
-	fmt.Printf("  config:  %s\n", filepath.Join(cfg.Dir(), "config.toml"))
+	fmt.Printf("  config:  %s\n", filepath.Join(cfg.Dir(), "config.shcl"))
 	fmt.Printf("  ddl:     %s\n", cfg.DDLPath)
 	fmt.Printf("  tx-log:  %s\n", cfg.LogDir)
 	fmt.Printf("  sqlite:  %s\n", cfg.SQLitePath)

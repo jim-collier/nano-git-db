@@ -19,7 +19,7 @@ import (
 type Listed struct {
 	Name   string
 	Dir    string
-	Config *DBConfig // nil when config.toml itself could not be read
+	Config *DBConfig // nil when config.shcl itself could not be read
 	System bool      // from a read-only system base
 	Err    error     // nil means openable; else why not
 }
@@ -42,7 +42,7 @@ func List() []Listed {
 }
 
 // scanBase lists the immediate sub-directories of one base that hold a
-// config.toml. A missing base is not an error - it just yields nothing.
+// config.shcl. A missing base is not an error - it just yields nothing.
 func scanBase(base string, system bool) []Listed {
 	entries, err := os.ReadDir(base)
 	if err != nil {
