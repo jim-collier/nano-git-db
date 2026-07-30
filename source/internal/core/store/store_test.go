@@ -21,9 +21,9 @@ const personDDL = "tables:\n" +
 	"\t\t\t\ttype: int\n" +
 	"\t\t\t\tdefaultval: 0\n" +
 	"\t\tuniques:\n" +
-	"\t\t\tname\n" +
+	"\t\t\tunique: name\n" +
 	"\t\tindexes:\n" +
-	"\t\t\tage\n"
+	"\t\t\tindex: age\n"
 
 func TestBuildSchema(t *testing.T) {
 	schema, err := ddl.Parse([]byte(personDDL))
@@ -81,7 +81,7 @@ func TestBuildMigratesNewFields(t *testing.T) {
 		"\t\t\t\ttype: string\n" +
 		"\t\t\t\tnull_ok: no\n" + // NOT NULL without default: alter must relax it
 		"\t\tuniques:\n" +
-		"\t\t\tname\n"
+		"\t\t\tunique: name\n"
 	grown, err := ddl.Parse([]byte(grownDDL))
 	if err != nil {
 		t.Fatal(err)

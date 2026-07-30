@@ -205,12 +205,14 @@ func sqlType(typ string) string {
 	}
 }
 
-// defaultLiteral renders a field's DDL default as a SQL literal. NULL and
-// function refs are skipped: NULL is the column default anyway, and functions
-// are computed by the app, not by SQLite.
+// defaultLiteral renders a field's DDL default as a SQL literal. Sentinels and
+// function refs are skipped: @null is the column default anyway, and @previous
+// and functions are computed by the app, not by SQLite. Testing the whole
+// sentinel set matters - checking only @null let @previous through as the
+// literal text on any column type SQLite would accept a string for.
 func defaultLiteral(field ddl.Field) (string, bool) {
 	def := strings.TrimSpace(field.Default)
-	if def == "" || ddl.IsNull(def) {
+	if def == "" || ddl.IsSentinel(def) || ddl.IsNull(def) {
 		return "", false
 	}
 	if _, _, ok := ddl.AsFunc(def); ok {
