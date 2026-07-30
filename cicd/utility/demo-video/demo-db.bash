@@ -31,7 +31,7 @@ export NANOGITDB_USER=demo NANOGITDB_HOST=workstation
 dir="$parent/team-issues"
 rm -rf "$dir"; mkdir -p "$dir"
 
-cat > "$dir/issues.ddl" <<'DDL'
+cat > "$dir/issues.shcl" <<'DDL'
 database:
 	tables:
 		table: task
@@ -77,7 +77,7 @@ DDL
 cd "$dir"
 ngdb() { "$exe" "$@"; }
 
-# register the folder's lone issues.ddl as the database "issues" (tx-log stays
+# register the folder's lone issues.shcl as the database "issues" (tx-log stays
 # here in the folder; the sqlite view goes to the registry). Every command after
 # this just names "issues" - no ddl/sqlite/log paths on screen.
 ngdb --init . >/dev/null

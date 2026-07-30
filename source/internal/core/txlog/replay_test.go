@@ -36,7 +36,7 @@ const uniqueDDL = "tables:\n" +
 	"\t\t\tfield: name\n" +
 	"\t\t\t\ttype: string\n" +
 	"\t\tuniques:\n" +
-	"\t\t\tname\n"
+	"\t\t\tunique: name\n"
 
 // Two soft-deletes of the same natural key used to collide on the unique index
 // and abort the entire replay; partial indexes must make this a non-event.

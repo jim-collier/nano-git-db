@@ -44,10 +44,10 @@ In each section, items are listed approximately from newest to oldest.
 ### Misc to-do
 
 - 🛠️ Figure a clean and consistent way to hide list columns (or fields in general).
-	- Design settled: `visible_form`/`visible_list` per field (spec in example.ddl, decisions in design.md UI section). Implementation waits for the shcl syntax migration.
+	- Design settled: `visible_form`/`visible_list` per field (spec in example.shcl, decisions in design.md UI section). The syntax migration it was waiting on is done; the display work itself is still to do.
 
 - 🛠️ Figure a clean and consistent way to show emojis or other short symbolic text in TUI, for lookup items, rather than description.
-	- Design settled: built-in `lookups`/`lookup_values` tables with a `symbol` column, `lookup_in_lists`/`lookup_in_forms: symbol|title|both` display enums, int `idx` reference keys, DDL seed rows. Spec in example.ddl, decisions in design.md Lookups section. Implementation waits for the shcl syntax migration.
+	- Design settled: built-in `lookups`/`lookup_values` tables with a `symbol` column, `lookup_in_lists`/`lookup_in_forms: symbol|title|both` display enums, int `idx` reference keys, seed rows in the schema. Spec in example.shcl, decisions in design.md Lookups section. The syntax migration it was waiting on is done; idx assignment, the seed engine and the display enums are still to do.
 
 - 🛠️ Need to research, decide, and document how to separate different concerns in the enterprise repo (and identify what the concerns even are), e.g.:
 	- Customer-facing enterprise product
@@ -59,9 +59,6 @@ In each section, items are listed approximately from newest to oldest.
 ### Bugs
 
 ### New features and enhancements
-
-- ✋ Use sister project 'SHCL' as the engine for config and DDL files.
-	- Once it's stable
 
 - 🛠️ Optional encrypted data in the transaction log. The local SQLite copy is always decrypted.
 	- Reason: keep the log unreadable to the git host, or to anyone who gets the repo.
@@ -79,6 +76,14 @@ In each section, items are listed approximately from newest to oldest.
 #### Done - Bugs
 
 #### Done - New features and enhancements
+
+- ✅ Use sister project 'SHCL' as the engine for config and DDL files.
+	- Done: one language now covers the schema, the queries sidecar, and ngdb's own registry, settings and web-credential files. The TOML dependency is gone, and so is the hand-rolled indent parser.
+	- Done: schema files are `.shcl`, queries are `.queries.shcl`. A directory holding a pre-rename `.ddl` still opens.
+	- Done: the schema's own key vocabulary is a validation file inside the binary, so a mistyped key is named with its line number instead of being ignored. A schema with errors marks its database unopenable, as before.
+	- Done: renames go through the writer rather than editing lines of text, so comments survive by construction. The file comes back canonical, which does reflow hand-tuned column alignment once.
+	- Note: syntax changes to existing schemas - `unique:`/`index:` entries instead of bare comma rows, `.` instead of `/` for path shorthand, relationships need names, seeds name their table. Details in syntax.md.
+	- Note: restating a table or a query now merges it rather than dropping the repeat, since that is how the language joins nodes.
 
 - ✅ Shorter row and transaction ids in the log.
 	- Done: ids are written as 22 characters of base64url instead of 32 of hex. Two ride on every line, so the log gets smaller to read and replay; the git repo barely changes, since both forms hold the same bits.

@@ -34,8 +34,8 @@ database:
 					aliases: field99, "favorite_candy"
 					type:          string  #..........: string|int|float|bool|datetime[_local]|datetime_utc|binary  ## datetime[_local] stores UTC but displays in user's local time.
 					special:       "%|($0|$2|etc) [and other valid currency symbols]"  ## Defaults internal processing (e.g. % <--> float), defaults a UI format for currency unless overridden, etc.
-					is_active:     bool
-					defaultval:    @null  #...........: Three forms: a static value; a sentinel from the closed set @null|@previous (@previous = value from the previously entered row, this session, interactive front-ends only - programmatic writes never inherit it); or a script function name, in format (without quotes): "fMyFunction()". Args that will be passed: table_name, field_name. A literal value starting with @ gets quoted.
+					is_active:            #..........: bool. Whether the field itself is in use.
+					defaultval:    @null  #...........: Three forms: a static value; a sentinel from the closed set @null|@previous (@previous = value from the previously entered row, this session, interactive front-ends only - programmatic writes never inherit it); or a script function name, in format (without quotes): "fMyFunction()". Args that will be passed: table_name, field_name. The two sentinels are reserved words here - a read strips outer quotes, so there is no quoted spelling that means the literal text.
 					validation:  #....................: Not all validations are valid for all data types. Executable spits warnings if so, and ignores what it can. (Or errors if serious enough.)
 						null_ok:       true  #............: True if not specified.
 						empty_ok:      n  #...............: True if not specified.
@@ -59,7 +59,7 @@ database:
 						width:  ## Integer, approx number of characters.
 						widget:  ## listbox|editbox|radio|checkbox|image|audio
 						format:  ## e.g. printf format string. Display-only format after saving.
-						list_type: literal|sql|lookup
+						list_type:  #............: literal|sql|lookup
 							## Checkbox can only be "literal", listbox can be any.
 						list_source: ## string
 							## list_type:
@@ -78,10 +78,10 @@ database:
 				before_update:  #.............: Function that, if exists, is sent: table_name, and a key:value array of field values [or something], to validate and/or update. Return pass|fail boolean to cancel update.
 				after_update:  #..............: Function that, if exists, is sent: table_name, row_id.
 			uniques:  ## These get automatically named. These are also indexed.
-				field_name1, field_name2
-				field3, field5
+				unique: field_name1, field_name2
+				unique: field_name2
 			indexes:  ## Warn if an identical index is already named as a unique (which is inherently also indexed).
-				field_name1
+				index: field_name1
 			features:  ## And default values. These are typically shown in a related 1:M inserted grid, that can be drilled into.
 				local_attachments: n
 				uri_attachments: n
@@ -91,12 +91,12 @@ database:
 			## Fields that all tables get, always and immutably:
 			## A DDL field entry naming one of these may carry `ui:` only (presentation merge); `type:`, `validation:`, `defaultval:` on a system field warn and are ignored.
 			## Even tables "Automatic features that any table can opt-in to" get these:
-				## May or may not be visible to UI
-					- `id`: Table primary key and first field. It stores a GUID (either binary, hex, or base64 whichever makes the most sense). If binary, then program user-facing interfaces will need to be given [and able to give] hex or base64 representations). Indexed, unique.
-					- `is_active`: defaults yes.
-					- `date_created`
-				## Hidden from UI
-					- `is_deleted`: This gets set for record deletion, with garbage collection. Gets auto-added to uniques (except `id`) if not already specified.
+				## May or may not be visible to UI:
+				##   - `id`: Table primary key and first field. It stores a GUID (either binary, hex, or base64 whichever makes the most sense). If binary, then program user-facing interfaces will need to be given [and able to give] hex or base64 representations). Indexed, unique.
+				##   - `is_active`: defaults yes.
+				##   - `date_created`
+				## Hidden from UI:
+				##   - `is_deleted`: This gets set for record deletion, with garbage collection. Gets auto-added to uniques (except `id`) if not already specified.
 
 ui:
 	views:
@@ -133,15 +133,15 @@ ui:
 ## Caveat: two offline clients minting a value concurrently can allocate the same idx; the unique index drops one at replay with a warning. Prefer seeding via the DDL, where idx conflicts surface as ordinary git merge conflicts.
 database:
 	relationships:
-		relationship:  ## auto-named
-			type:  1:m  ## The relationship is managed by a field on the child entity. This basically just provides optional cascading deletes, and isn't necessary to define, if not doing that.
+		relationship: table1_table2  ## the 1:m link below
+			type:  "1:m"  ## The relationship is managed by a field on the child entity. This basically just provides optional cascading deletes, and isn't necessary to define, if not doing that.
 			parent: table_1
 			child: table_2
 			parent_id_field: my_parent_id  ## Code makes sure this child field is indexed.
 			cascade_delete: y  ## "y" is the main reason to use this feature, otherwise can be redundant.
-database/relationships:
-	relationship:  ## auto-named
-		type:  m:m  ## Implies use of the "Many-to-many relationships" table. Very much not redundant with anything two entities can do themselves.
+database.relationships:
+	relationship: table1_table2_m2m  ## the m:m link below
+		type:  "m:m"  ## Implies use of the "Many-to-many relationships" table. Very much not redundant with anything two entities can do themselves.
 		parent: table_1
 		child: table_2
 		cascade_delete: n
@@ -174,11 +174,9 @@ database:
 						empty_ok:  y
 						required:  no
 						defaultval: @null
-				field: is_active
-					type:          bool
-					validation:
-						null_ok:   n
-						defaultval: true
+				field: is_active  ## Already a system column, so this entry may only restyle it.
+					ui:
+						label: "Active"
 		table: "lookup_values"
 			access:
 			fields:
@@ -230,14 +228,12 @@ database:
 						empty_ok:  n
 						required:  no
 						defaultval: @null
-				field: is_active
-					type:          bool
-					validation:
-						null_ok:   n
-						defaultval: true
+				field: is_active  ## Already a system column, so this entry may only restyle it.
+					ui:
+						label: "Active"
 	seed:  ## Rows inserted log-first at open when their idx is absent; never overwrites - runtime edits to a seeded row win forever after.
-		lookups:
+		table: lookups
 			row: idx=1, title="Task status"
-		lookup_values:
+		table: lookup_values
 			row: idx=1, lookups_idx=1, title="Open",   symbol="🟢", sort=1
 			row: idx=2, lookups_idx=1, title="Closed", symbol="✅", sort=2
