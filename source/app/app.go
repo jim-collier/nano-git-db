@@ -81,7 +81,7 @@ func Run(args []string) error {
 	if len(args) > 0 {
 		mode = args[0]
 	}
-	// --init[=path]: register a database from a $PWD .ddl (its own mode, not a
+	// --init[=path]: register a database from a $PWD .shcl (its own mode, not a
 	// data verb).
 	if val, ok := splitFlag(mode, "--init"); ok {
 		rest := args[1:]

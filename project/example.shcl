@@ -35,7 +35,7 @@ database:
 					type:          string  #..........: string|int|float|bool|datetime[_local]|datetime_utc|binary  ## datetime[_local] stores UTC but displays in user's local time.
 					special:       "%|($0|$2|etc) [and other valid currency symbols]"  ## Defaults internal processing (e.g. % <--> float), defaults a UI format for currency unless overridden, etc.
 					is_active:            #..........: bool. Whether the field itself is in use.
-					defaultval:    @null  #...........: Three forms: a static value; a sentinel from the closed set @null|@previous (@previous = value from the previously entered row, this session, interactive front-ends only - programmatic writes never inherit it); or a script function name, in format (without quotes): "fMyFunction()". Args that will be passed: table_name, field_name. A literal value starting with @ gets quoted.
+					defaultval:    @null  #...........: Three forms: a static value; a sentinel from the closed set @null|@previous (@previous = value from the previously entered row, this session, interactive front-ends only - programmatic writes never inherit it); or a script function name, in format (without quotes): "fMyFunction()". Args that will be passed: table_name, field_name. The two sentinels are reserved words here - a read strips outer quotes, so there is no quoted spelling that means the literal text.
 					validation:  #....................: Not all validations are valid for all data types. Executable spits warnings if so, and ignores what it can. (Or errors if serious enough.)
 						null_ok:       true  #............: True if not specified.
 						empty_ok:      n  #...............: True if not specified.
@@ -174,11 +174,9 @@ database:
 						empty_ok:  y
 						required:  no
 						defaultval: @null
-				field: is_active
-					type:          bool
-					validation:
-						null_ok:   n
-						defaultval: true
+				field: is_active  ## Already a system column, so this entry may only restyle it.
+					ui:
+						label: "Active"
 		table: "lookup_values"
 			access:
 			fields:
@@ -230,11 +228,9 @@ database:
 						empty_ok:  n
 						required:  no
 						defaultval: @null
-				field: is_active
-					type:          bool
-					validation:
-						null_ok:   n
-						defaultval: true
+				field: is_active  ## Already a system column, so this entry may only restyle it.
+					ui:
+						label: "Active"
 	seed:  ## Rows inserted log-first at open when their idx is absent; never overwrites - runtime edits to a seeded row win forever after.
 		table: lookups
 			row: idx=1, title="Task status"

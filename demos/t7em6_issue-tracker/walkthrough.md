@@ -5,7 +5,7 @@
 <!-- markdownlint-disable MD041 -- First line in a file should be a top-level heading -->
 # Nano Git DB - demo walkthrough
 
-This is a "script" for demonstrating the tool through the CLI, the terminal UI, and the local web UI, using the small issue-tracker schema in this folder (`issues.ddl` + `issues.queries`). All three front-ends share one core, so the same database opens identically in any of them.
+This is a "script" for demonstrating the tool through the CLI, the terminal UI, and the local web UI, using the small issue-tracker schema in this folder (`issues.shcl` + `issues.queries.shcl`). All three front-ends share one core, so the same database opens identically in any of them.
 
 The story to land: *the append-only tx-log is the database*. SQLite is a disposable local view rebuilt from the log, and the log is plain text that lives in git - so the whole database syncs, merges, and diffs like source code.
 
@@ -27,7 +27,7 @@ Work in a scratch directory so the demo is self-contained and easy to reset:
 
 ```bash
 mkdir -p /tmp/ngdb-demo && cd /tmp/ngdb-demo
-cp <this-repo>/github_floss/demos/t7em6_issue-tracker/issues.{ddl,queries} .
+cp <this-repo>/github_floss/demos/t7em6_issue-tracker/issues.shcl issues.queries.shcl .
 export NANOGITDB_USER=demo NANOGITDB_HOST=workstation
 
 exe=<this-repo>/github_floss/bin/ngdb
@@ -41,8 +41,8 @@ $exe --init .
 
 ```bash
 registered "issues"
-  config:  <config>/ngdb/issues/config.toml
-  ddl:     /tmp/ngdb-demo/issues.ddl
+  config:  <config>/ngdb/issues/config.shcl
+  ddl:     /tmp/ngdb-demo/issues.shcl
   tx-log:  /tmp/ngdb-demo
   sqlite:  <config>/ngdb/issues/issues.sqlite
   note: the tx-log dir is not in a git repo; syncing stays off until it is
@@ -55,7 +55,7 @@ registered "issues"
 > "The schema is just a readable text file - indented key/values, no SQL DDL."
 
 ```bash
-$exe ddl ./issues.ddl
+$exe ddl ./issues.shcl
 ```
 
 ```bash
@@ -203,7 +203,7 @@ a=load-all  p=queries  enter=edit  tab=next-block  esc=back  T=theme  q=quit
 
 - Point out the hierarchy: NGD-2 and NGD-3 sit indented under the NGD-1 epic - the `tree_grid` following `parent_issue`, same as the web board.
 
-- Press **p** to open the named-query picker; choose **High priority**, **Closed**, or **Everything** and watch the block reload. These are the queries from `issues.queries`.
+- Press **p** to open the named-query picker; choose **High priority**, **Closed**, or **Everything** and watch the block reload. These are the queries from `issues.queries.shcl`.
 
 - Press **Enter** on a row to open its edit form; change `status` or `priority`, save. That write is a log entry plus an audit row, exactly like the CLI `update`.
 
@@ -285,7 +285,7 @@ Then drop the `issues` record from the registry: run `$exe` with no arguments to
 
 | Beat | CLI | TUI | Web
 | :--                    | :--                            | :--                          | :--
-| Schema is plain text   | `ngdb ddl ./issues.ddl`        | main list: views + tables    | left sidebar lists tables + views
+| Schema is plain text   | `ngdb ddl ./issues.shcl`       | main list: views + tables    | left sidebar lists tables + views
 | Create                 | `create issues <table> f=v`    | `n` -> fill -> save          | **New** -> fill -> **Save**
 | Read                   | `get` / `query issues ...`     | a view, or `a`=load-all       | a view, or **All** on a block
 | Named queries          | the same SQL by hand           | `p` -> pick                  | query dropdown -> **Run query**

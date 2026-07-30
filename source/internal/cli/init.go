@@ -16,7 +16,7 @@ import (
 )
 
 // Init registers a new database in the config registry - the flag-driven twin
-// of the TUI picker's "Create new database". The schema is a lone *.ddl in the
+// of the TUI picker's "Create new database". The schema is a lone *.shcl in the
 // current directory (its base name is the database name); the optional arg says
 // where the git-synced tx-log goes:
 //
@@ -29,7 +29,7 @@ import (
 func Init(args []string) error {
 	ddlPath, ok := config.PWDDdl()
 	if !ok {
-		return fmt.Errorf("--init: run this in a directory holding exactly one .ddl (the schema to register)")
+		return fmt.Errorf("--init: run this in a directory holding exactly one .shcl (the schema to register)")
 	}
 	name := dbName(ddlPath)
 
